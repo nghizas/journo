@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Journo">
+  <meta name="theme-color" content="#0e0e12">
+  <title>Journo</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <label class="datepick" aria-label="Change entry date">
+        <span class="date" id="draftDate"></span><span class="caret">▾</span>
+        <input type="date" id="dateInput">
+      </label>
+      <div class="sub" id="draftSub"></div>
+    </div>
+    <nav class="tabs">
+      <button data-view="today" class="active">Today</button>
+      <button data-view="archive">Archive</button>
+    </nav>
+  </header>
+
+  <main id="view-today" class="view">
+    <div class="banner" id="staleBanner" hidden></div>
+
+    <section class="card">
+      <h2>Sleep</h2>
+      <div class="timerow">
+        <label>Woke up</label>
+        <button class="timebtn" id="wake"></button>
+        <button class="ghost" data-now="wake">now</button>
+      </div>
+      <div class="raterow">
+        <span class="name">Sleep quality</span>
+        <div class="stars zs" data-rate="sleepRating" data-glyph="Z"></div>
+      </div>
+      <h3 class="sub-h">Dreams</h3>
+      <form class="noteadd" id="dreamsForm">
+        <input type="text" id="dreamsInput" placeholder="a scene, a person, a feeling…" autocomplete="off" enterkeyhint="done">
+        <button class="primary">Add</button>
+      </form>
+      <ul class="notelist" id="dreamsList"></ul>
+    </section>
+
+    <section class="card" id="scales"></section>
+
+    <section class="card" id="exercise"></section>
+
+    <section class="card">
+      <h2>Mood</h2>
+      <svg id="wheel" viewBox="-160 -160 320 320" aria-label="Emotion wheel"></svg>
+      <div class="moodpick" id="moodPick" hidden>
+        <button class="moodclose" id="moodCancel" aria-label="Close without logging">×</button>
+        <div class="moodname" id="moodName"></div>
+        <div class="scale">
+          <div class="scalehead"><span>Intensity</span><span class="val" id="moodIntVal">3</span></div>
+          <input type="range" min="1" max="5" step="1" value="3" id="moodInt" class="grad">
+        </div>
+        <button class="primary" id="moodLog">Log feeling</button>
+      </div>
+      <ul class="moodlist" id="moodList"></ul>
+    </section>
+
+    <section class="card" id="intimacy"></section>
+
+    <section class="card">
+      <h2>Notes</h2>
+      <form class="noteadd" id="notesForm">
+        <input type="text" id="notesInput" placeholder="a thought, a moment…" autocomplete="off" enterkeyhint="done">
+        <button class="primary">Add</button>
+      </form>
+      <ul class="notelist" id="notesList"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Night</h2>
+      <div class="timerow">
+        <label>Bed time</label>
+        <button class="timebtn" id="bed"></button>
+        <button class="ghost" data-now="bed">now</button>
+      </div>
+      <div class="raterow">
+        <span class="name">Day rating</span>
+        <div class="stars" data-rate="dayRating"></div>
+      </div>
+      <button class="primary big" id="endDay">End day &amp; save</button>
+      <button class="link" id="clearEntry">Clear this entry</button>
+    </section>
+  </main>
+
+  <main id="view-archive" class="view" hidden>
+    <section class="card">
+      <h2>Nightly backup</h2>
+      <div class="seg" id="backupMode">
+        <button data-mode="download">Download</button>
+        <button data-mode="share">Share sheet</button>
+      </div>
+      <p class="muted" id="backupHelp"></p>
+      <div class="unbacked" id="unbacked" hidden>
+        <span id="unbackedText"></span>
+        <button class="ghost" id="backupNow">Back up all now</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Export</h2>
+      <p class="muted">Saves a JSON file through the share sheet. Pick "Save to Files" and choose an iCloud Drive folder.</p>
+      <div class="btnrow">
+        <button class="primary" id="exportAll">Export everything</button>
+        <button class="ghost" id="importBtn">Import backup</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+    </section>
+    <div id="months"></div>
+    <section class="card danger">
+      <button class="ghost" id="clearAll">Clear all data…</button>
+    </section>
+  </main>
+
+  <dialog id="dayDialog">
+    <pre id="dayJson"></pre>
+    <div class="btnrow">
+      <button class="primary" id="dayShare">Export day</button>
+      <button class="ghost" id="dayReopen">Reopen</button>
+      <button class="ghost" id="dayDelete">Delete</button>
+      <button class="ghost" id="dayClose">Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="askDialog" class="ask">
+    <p id="askText"></p>
+    <button class="primary big" id="askOk"></button>
+    <button class="link" id="askCancel">Cancel</button>
+  </dialog>
+
+  <dialog id="padDialog" class="pad">
+    <div class="padtitle" id="padTitle"></div>
+    <div class="padshow">
+      <span class="padtime" id="padTime"></span>
+      <div class="ampm">
+        <button data-ap="am">AM</button>
+        <button data-ap="pm">PM</button>
+      </div>
+    </div>
+    <div class="keys" id="padKeys">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="now" class="fn">now</button><button data-k="0">0</button><button data-k="del" class="fn">⌫</button>
+    </div>
+    <button class="primary big" id="padSet">Set</button>
+    <div class="padfoot">
+      <button class="link" id="padClear">Clear time</button>
+      <button class="link" id="padCancel">Cancel</button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

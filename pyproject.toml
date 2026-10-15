@@ -1,0 +1,7 @@
+[project]
+name = "journo"
+version = "0.1.0"
+description = "Minimalist daily life-data capture PWA"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
