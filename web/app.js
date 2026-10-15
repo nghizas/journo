@@ -61,7 +61,9 @@ const prettyDate = iso => parseDate(iso).toLocaleDateString(undefined, { weekday
 // ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
-const DEFAULT_SETTINGS = { backup: 'download' };
+// Home-screen (standalone) apps on iOS show downloads instead of saving them, so they must use the share sheet.
+const STANDALONE = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+const DEFAULT_SETTINGS = { backup: STANDALONE ? 'share' : 'download' };
 
 function newDraft(date = localDate()) {
   const d = { date, wake: null, bed: null, sleepRating: null, dayRating: null, dreams: [], moods: [], notes: [] };
@@ -96,6 +98,11 @@ function load() {
       if (!['download', 'share'].includes(settings.backup)) settings.backup = DEFAULT_SETTINGS.backup;
       delete settings.shortcut;
       const days = Object.fromEntries(Object.entries(raw.days).map(([k, d]) => [k, migrate(d)]));
+      // Downloads in home-screen mode only previewed the file, so those "backed up" marks weren't real.
+      if (STANDALONE && settings.backup === 'download') {
+        settings.backup = 'share';
+        for (const d of Object.values(days)) delete d.backedUpAt;
+      }
       return { ...raw, schema: SCHEMA, draft: migrate(raw.draft), days, settings };
     }
   } catch (e) { console.warn(e); }
@@ -817,34 +824,45 @@ async function importFile(file) {
 // ---------------------------------------------------------------------------
 const sortedDays = () => Object.values(db.days).sort((a, b) => a.date.localeCompare(b.date));
 
+// Fixed slots so days line up like a chart: sleep | mood through the day | food | movement | drinks.
+// Unlogged slots stay dim. Grid columns are shared with the legend row (.daybar in CSS).
+const BAR_SLOTS = ['sleep', 'mood', 'food', 'move', 'drinks'];
+
+function barColors(d) {
+  const moods = d.moods || [];
+  const moodColors = moods.map(m => feelingColor(m.core, m.feeling));
+  return {
+    sleep: d.sleepRating == null ? null : mix('#2b2350', '#c9b8ff', (d.sleepRating - 1) / 4),
+    mood: !moods.length ? null
+      : moods.length === 1 ? moodColors[0]
+      : `linear-gradient(90deg, ${moodColors.join(', ')})`,
+    food: d.diet == null ? null : sampleStops(SCALES[0].stops, d.diet / 10),
+    move: dayIntensity(d.exercise) ? INTENSITY[dayIntensity(d.exercise)].color : '#4a4a56', // rest = dark grey
+    drinks: !d.alcohol ? null : mix('#5a3d12', '#f2a93b', (d.alcohol - 1) / 2),
+  };
+}
+
 function dayStrip(d) {
-  const strip = el('div', 'strip');
-  for (const s of SCALES) {
-    const seg = el('span');
-    if (d[s.key] != null) seg.style.background = sampleStops(s.stops, (d[s.key] - s.min) / (s.max - s.min));
-    strip.append(seg);
+  const bar = el('div', 'daybar');
+  const colors = barColors(d);
+  for (const slot of BAR_SLOTS) {
+    const seg = el('span', colors[slot] ? slot : `${slot} off`);
+    if (colors[slot]) seg.style.background = colors[slot];
+    bar.append(seg);
   }
-  for (const k of d.exercise || []) {
-    const x = EXERCISE.find(e => e.key === k);
-    const seg = el('span');
-    if (x) seg.style.background = INTENSITY[x.intensity].color;
-    strip.append(seg);
-  }
-  for (const m of d.moods || []) {
-    const seg = el('span');
-    seg.style.background = feelingColor(m.core, m.feeling);
-    strip.append(seg);
-  }
-  return strip;
+  return bar;
 }
 
 function renderBackupSettings() {
   const mode = db.settings.backup;
-  document.querySelectorAll('#backupMode button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  document.querySelectorAll('#backupMode button').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+    b.disabled = STANDALONE && b.dataset.mode === 'download';
+  });
   $('backupHelp').textContent = {
     download: 'End day saves journo-YYYY-MM-DD.json to Files › Downloads (iCloud Drive/Downloads by default).',
     share: 'End day opens the share sheet. Pick Save to Files and a folder; iOS remembers the last one.',
-  }[mode];
+  }[mode] + (STANDALONE ? ' (Home-screen apps can\'t download directly, so the share sheet is always used.)' : '');
 
   const pending = unbackedDays();
   $('unbacked').hidden = !pending.length;
@@ -871,12 +889,17 @@ function renderArchive() {
     const btn = el('button', 'ghost', 'Export month');
     btn.addEventListener('click', () => exportMonth(month));
     h.append(el('span', null, `${title} · ${list.length}`), btn);
-    card.append(h);
+    const legend = el('div', 'dayrow legend');
+    const labels = el('div', 'daybar');
+    for (const slot of BAR_SLOTS) labels.append(el('span', slot, slot));
+    legend.append(el('span', 'd'), labels, el('span', 'r'), el('span', 'bk'));
+    card.append(h, legend);
     for (const d of list) {
       const row = el('div', 'dayrow');
       const mark = el('span', d.backedUpAt ? 'bk ok' : 'bk', d.backedUpAt ? '☁︎' : '●');
       mark.title = d.backedUpAt ? 'Backed up' : 'Not backed up yet';
-      row.append(el('span', 'd', prettyDate(d.date).replace(/,.*/, '') + ' ' + d.date.slice(8)), dayStrip(d), mark);
+      const rating = el('span', 'r', d.dayRating == null ? '' : `★${d.dayRating}`);
+      row.append(el('span', 'd', prettyDate(d.date).replace(/,.*/, '') + ' ' + d.date.slice(8)), dayStrip(d), rating, mark);
       row.addEventListener('click', () => openDay(d.date));
       card.append(row);
     }

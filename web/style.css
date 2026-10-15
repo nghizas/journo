@@ -266,8 +266,17 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
   padding: 9px 0; border-top: 1px solid var(--line);
 }
 .dayrow .d { width: 74px; font-variant-numeric: tabular-nums; }
-.dayrow .strip { flex: 1; display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--line); }
-.dayrow .strip span { flex: 1; }
+.dayrow .daybar {
+  flex: 1; display: grid; gap: 2px; height: 16px;
+  grid-template-columns: 1fr 4fr 1fr 1fr 1fr;
+  border-radius: 4px; overflow: hidden;
+}
+.daybar .off { background: var(--line); opacity: .5; }
+.dayrow .r { width: 26px; text-align: right; font-size: 12px; color: #f6c945; font-variant-numeric: tabular-nums; }
+.dayrow.legend { padding: 0 0 6px; border-top: 0; cursor: default; }
+.dayrow.legend .daybar { height: auto; overflow: visible; }
+.dayrow.legend .daybar span { font-size: 9px; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: .04em; opacity: 1; background: none; }
+.seg button:disabled { opacity: .35; }
 .dayrow .bk { width: 16px; text-align: center; font-size: 10px; color: #ffb86b; }
 .dayrow .bk.ok { font-size: 14px; color: var(--muted); }
 .empty { color: var(--muted); text-align: center; padding: 30px 0; }
