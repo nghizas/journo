@@ -172,6 +172,17 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
 .pickcol .name { font-weight: 550; font-size: 14px; color: var(--muted); padding-left: 2px; }
 .pickcol .pills button { flex: 1; min-width: 0; }
 
+/* ---- end-of-day checklist ---- */
+.checklist { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 18px; font-size: 13px; color: var(--muted); }
+.checklist .lead { margin-right: 2px; }
+.checklist button {
+  border: 1px solid #5a4a2a; background: none; color: #ffb86b;
+  border-radius: 999px; padding: 4px 10px; font-size: 13px;
+}
+.checklist.done { color: #6fcf6a; }
+.flash { animation: flash 1.2s ease-out; border-radius: 12px; }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 3px #ffb86b; } 100% { box-shadow: 0 0 0 3px transparent; } }
+
 /* ---- star ratings ---- */
 .raterow { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
 .raterow .name { flex: 1; }

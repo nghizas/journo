@@ -110,14 +110,13 @@ function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
   catch (e) { toast('Could not save! Storage full?'); }
   renderHeader();
+  renderChecklist();
 }
 
 // An untouched draft from a previous day rolls forward to today (unless you picked that date on purpose).
 function rollForward() {
   if (isEmpty(draft) && !draft.manualDate && draft.date < localDate()) { draft.date = localDate(); save(); }
 }
-rollForward();
-
 navigator.storage?.persist?.();
 
 const unbackedDays = () => Object.values(db.days).filter(d => !d.backedUpAt).map(d => d.date).sort();
@@ -658,6 +657,35 @@ function bindMood() {
 // ---------------------------------------------------------------------------
 // End day
 // ---------------------------------------------------------------------------
+// The core daily fields. Never blocks saving; just shows what's still open above End day.
+const CHECKS = [
+  { label: 'wake time', ok: d => d.wake, target: '#wake' },
+  { label: 'sleep', ok: d => d.sleepRating != null, target: '[data-rate="sleepRating"]' },
+  { label: 'food', ok: d => d.diet != null, target: '#scales .scale' },
+  { label: 'mood', ok: d => d.moods.length, target: '#wheel' },
+  { label: 'bed time', ok: d => d.bed, target: '#bed' },
+  { label: 'day rating', ok: d => d.dayRating != null, target: '[data-rate="dayRating"]' },
+];
+
+function renderChecklist() {
+  const box = $('checklist');
+  const missing = CHECKS.filter(c => !c.ok(draft));
+  box.classList.toggle('done', !missing.length);
+  if (!missing.length) { box.replaceChildren(el('span', null, '✓ Everything logged')); return; }
+  box.replaceChildren(el('span', 'lead', 'Still open:'));
+  for (const c of missing) {
+    const b = el('button', null, c.label);
+    b.addEventListener('click', () => {
+      const target = document.querySelector(c.target);
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.remove('flash');
+      void target.offsetWidth; // restart the animation
+      target.classList.add('flash');
+    });
+    box.append(b);
+  }
+}
+
 async function endDay() {
   if (isEmpty(draft)) return toast('Nothing logged yet');
   if (!draft.bed && !await ask('No bed time set. Save the day anyway?', 'Save anyway')) return;
@@ -920,6 +948,7 @@ function renderToday() {
   renderMoods();
   LOGS.forEach(renderLog);
   document.querySelectorAll('.stars').forEach(paintStars);
+  renderChecklist();
 }
 
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
@@ -932,6 +961,7 @@ $('clearEntry').addEventListener('click', clearEntry);
 // Coming back to the app after hours away: re-check the date.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { rollForward(); renderHeader(); } });
 
+rollForward();
 bindTimes();
 buildWheel();
 bindMood();
