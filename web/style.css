@@ -241,7 +241,7 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
 .moodlist .t, .notelist .t {
   width: 66px; padding: 0; border: 0; background: none; text-align: left;
   color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums;
-  text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: #4a4a56;
+  text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--muted);
 }
 .moodlist .f { flex: 1; text-transform: capitalize; }
 .moodlist .i { color: var(--muted); letter-spacing: 1px; }
