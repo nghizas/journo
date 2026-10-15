@@ -191,7 +191,7 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
 .noteadd input { flex: 1; min-width: 0; }
 .notelist { list-style: none; padding: 0; margin: 10px 0 0; }
 .notelist li { display: flex; align-items: baseline; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
-.notelist .t { color: var(--muted); font-variant-numeric: tabular-nums; width: 46px; flex: none; }
+.notelist .t { flex: none; }
 .notelist .txt { flex: 1; overflow-wrap: anywhere; }
 .notelist button { border: 0; background: none; color: var(--muted); font-size: 18px; }
 
@@ -237,7 +237,12 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
   padding: 8px 0; border-top: 1px solid var(--line); font-size: 15px;
 }
 .moodlist .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
-.moodlist .t { color: var(--muted); font-variant-numeric: tabular-nums; width: 46px; }
+/* tappable entry times (mood/note/dream) */
+.moodlist .t, .notelist .t {
+  width: 66px; padding: 0; border: 0; background: none; text-align: left;
+  color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums;
+  text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: #4a4a56;
+}
 .moodlist .f { flex: 1; text-transform: capitalize; }
 .moodlist .i { color: var(--muted); letter-spacing: 1px; }
 .moodlist button { border: 0; background: none; color: var(--muted); font-size: 18px; }

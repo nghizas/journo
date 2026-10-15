@@ -271,7 +271,7 @@ function setTime(key, hhmm) {
 }
 
 function bindTimes() {
-  for (const key of ['wake', 'bed']) $(key).addEventListener('click', () => openPad(key));
+  for (const key of ['wake', 'bed']) $(key).addEventListener('click', () => openTimePad(key));
   document.querySelectorAll('[data-now]').forEach(b => b.addEventListener('click', () => {
     const key = b.dataset.now;
     setTime(key, localTime());
@@ -338,14 +338,45 @@ function paintPad() {
   $('padSet').disabled = !h || m.length === 1;
 }
 
-function openPad(key) {
-  pad$.key = key;
-  pad$.fresh = !!draft[key];
-  if (draft[key]) padLoad(draft[key].slice(11));
-  else { pad$.h = ''; pad$.m = ''; pad$.pm = key === 'bed'; }
-  $('padTitle').textContent = key === 'wake' ? 'Woke up' : 'Bed time';
+// opts: { title, value: 'HH:MM' | null, pm (AM/PM default when empty), onSet(hhmm), onClear? }
+function openPad(opts) {
+  pad$.opts = opts;
+  pad$.fresh = !!opts.value;
+  if (opts.value) padLoad(opts.value);
+  else { pad$.h = ''; pad$.m = ''; pad$.pm = !!opts.pm; }
+  $('padTitle').textContent = opts.title;
+  $('padClear').style.visibility = opts.onClear ? 'visible' : 'hidden';
   paintPad();
   $('padDialog').showModal();
+}
+
+function openTimePad(key) {
+  openPad({
+    title: key === 'wake' ? 'Woke up' : 'Bed time',
+    value: draft[key]?.slice(11),
+    pm: key === 'bed',
+    onSet: hhmm => setTime(key, hhmm),
+    onClear: () => { draft[key] = null; save(); renderTimes(); },
+  });
+}
+
+// Mood/note/dream times: anything before 5am belongs to the night after the entry's date.
+const entryStamp = hhmm => `${+hhmm.slice(0, 2) < 5 ? addDays(draft.date, 1) : draft.date}T${hhmm}`;
+
+function entryTimeButton(list, item, title, rerender) {
+  const b = el('button', 't', fmt12(item.t));
+  b.setAttribute('aria-label', `Change time of ${title}`);
+  b.addEventListener('click', () => openPad({
+    title,
+    value: item.t.slice(11),
+    onSet: hhmm => {
+      item.t = entryStamp(hhmm);
+      list.sort((a, b) => a.t.localeCompare(b.t));
+      save();
+      rerender();
+    },
+  }));
+  return b;
 }
 
 function bindPad() {
@@ -359,10 +390,10 @@ function bindPad() {
   document.querySelectorAll('.ampm button').forEach(b => b.addEventListener('click', () => { pad$.pm = b.dataset.ap === 'pm'; paintPad(); }));
   $('padSet').addEventListener('click', () => {
     const H = (+pad$.h % 12) + (pad$.pm ? 12 : 0);
-    setTime(pad$.key, `${pad(H)}:${pad$.m || '00'}`);
+    pad$.opts.onSet(`${pad(H)}:${pad$.m || '00'}`);
     $('padDialog').close();
   });
-  $('padClear').addEventListener('click', () => { draft[pad$.key] = null; save(); renderTimes(); $('padDialog').close(); });
+  $('padClear').addEventListener('click', () => { pad$.opts.onClear?.(); $('padDialog').close(); });
   $('padCancel').addEventListener('click', () => $('padDialog').close());
 }
 
@@ -539,7 +570,7 @@ function renderMoods() {
     dot.style.background = feelingColor(m.core, m.feeling);
     const del = el('button', null, '×');
     del.addEventListener('click', () => { draft.moods.splice(idx, 1); save(); renderMoods(); });
-    li.append(dot, el('span', 't', m.t.slice(11)), el('span', 'f', m.feeling || m.core),
+    li.append(dot, entryTimeButton(draft.moods, m, m.feeling || m.core, renderMoods), el('span', 'f', m.feeling || m.core),
       el('span', 'i', '●'.repeat(m.intensity) + '○'.repeat(5 - m.intensity)), del);
     list.append(li);
   });
@@ -557,7 +588,7 @@ function renderLog(key) {
     const li = el('li');
     const del = el('button', null, '×');
     del.addEventListener('click', () => { draft[key].splice(idx, 1); save(); renderLog(key); });
-    li.append(el('span', 't', n.t.slice(11)), el('span', 'txt', n.text), del);
+    li.append(entryTimeButton(draft[key], n, key === 'dreams' ? 'Dream' : 'Note', () => renderLog(key)), el('span', 'txt', n.text), del);
     list.append(li);
   });
 }
