@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // Config — add/remove metrics here. Keys become fields in the exported JSON.
 // ---------------------------------------------------------------------------
-const SCHEMA = 3;
+const SCHEMA = 4;
 const STORE_KEY = 'journo.v1';
 
 // Each meal is skipped (null, the default) or a 0–4 rating: trash, junk, mixed, clean, dialed.
@@ -22,9 +22,35 @@ const emptyMeals = () => Object.fromEntries(MEALS.map(m => [m.key, null]));
 // Pages read: 0–50 in steps of 5; 50 means 50+.
 const PAGES = { max: 50, step: 5 };
 
+// Drinks are logged one tap at a time with the time you had them; the count comes from the list.
+const DRINKS = [
+  { key: 'caffeineLog', count: 'caffeine', emoji: '☕', label: 'Caffeine' },
+  { key: 'alcoholLog', count: 'alcohol', emoji: '🍷', label: 'Alcohol' },
+];
+
+// Productivity: one end-of-day score, 0–4. null = not rated.
+const PRODUCTIVITY = {
+  tiers: ['jack shit', 'phoned it in', 'got by', 'crushed it', 'full scale domination'],
+  stops: ['#4a4858', '#7d6fa8', '#b9a6ff', '#f2c94c', '#ffe27a'],
+};
+
+// Social: one entry per interaction that mattered. effect −2 drained … +2 recharged. No entries = a day alone.
+const SOCIAL = {
+  who: ['partner', 'family', 'friends', 'work', 'new people'],
+  effects: [[-2, 'drained', '#5f8fe0'], [-1, 'flat', '#8b8a96'], [0, 'fine', '#c9c6d4'], [1, 'good', '#93c46b'], [2, 'recharged', '#f6c945']],
+};
+
+const DREAM_RECALL = [['none', 'none'], ['forgot', 'yes, forgot'], ['remember', 'yes, remember']];
+
+// Starting tag list; you can add/remove tags in the app (kept in settings, not per day).
+const DEFAULT_TAGS = ['sick', 'headache', 'hungover', 'injured', 'day off', 'travel', 'late night', 'ate out', 'big screen day'];
+
+// Thayer's energy model: energy (tired 1 → energized 5) × tension (calm 1 → tense 5), tapped on a 5×5 square.
+// Corner colors: calm-energy, tense-energy, calm-tired, tense-tired.
+const ENERGY = { size: 5, corners: { tl: '#f6c945', tr: '#e2615c', bl: '#7fd6a0', br: '#5f8fe0' } };
+
 // Tap-to-pick rows. Stored as the option index, so the last option means "or more".
 const PICKS = [
-  { key: 'alcohol', label: 'Alcohol', card: 'scales', options: ['0', '1', '2', '3+'] },
   { key: 'sexPartner', label: 'Partner', card: 'intimacy', options: ['0', '1', '2+'] },
   { key: 'sexSolo', label: 'Solo', card: 'intimacy', options: ['0', '1', '2+'] },
 ];
@@ -93,12 +119,13 @@ const prettyDate = iso => parseDate(iso).toLocaleDateString(undefined, { weekday
 // ---------------------------------------------------------------------------
 // Home-screen (standalone) apps on iOS show downloads instead of saving them, so they must use the share sheet.
 const STANDALONE = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-const DEFAULT_SETTINGS = { backup: STANDALONE ? 'share' : 'download' };
+const DEFAULT_SETTINGS = { backup: STANDALONE ? 'share' : 'download', tags: DEFAULT_TAGS };
 
 function newDraft(date = localDate()) {
-  const d = { date, wake: null, bed: null, sleepRating: null, dayRating: null, dreams: [], moods: [], notes: [] };
+  const d = { date, wake: null, bed: null, sleepRating: null, dayRating: null, dreamRecall: null, dreams: [], moods: [], energy: [], social: [], notes: [], tags: [], productivity: null };
   d.meals = emptyMeals();
   d.pages = 0;
+  for (const x of DRINKS) d[x.key] = [];
   for (const p of PICKS) d[p.key] = 0;
   d.exercise = [];
   return d;
@@ -108,6 +135,7 @@ function isEmpty(d) {
   return !d.wake && !d.bed && !d.notes.length && !d.dreams.length && !d.moods.length
     && d.sleepRating == null && d.dayRating == null
     && d.diet == null && Object.values(d.meals || {}).every(v => v == null) && !d.pages
+    && !d.dreamRecall && !d.energy?.length && !d.social?.length && d.productivity == null && !d.tags?.length && DRINKS.every(x => !d[x.key]?.length) && !d.alcohol
     && PICKS.every(p => !d[p.key]) && !d.exercise?.length;
 }
 
@@ -120,6 +148,14 @@ function migrate(d) {
   const notes = rest.notes || (note ? [{ t: `${rest.date}T12:00`, text: note }] : []);
   const whole = v => (v == null ? null : Math.ceil(v));
   return { ...rest, sleepRating: whole(rest.sleepRating), dayRating: whole(rest.dayRating), dreams: rest.dreams || [], exercise, notes };
+}
+
+// Fills in fields added since the entry was made. An old 0–3 alcohol count becomes that many noon entries.
+function upgradeDraft(d) {
+  const { alcohol, ...rest } = migrate(d);
+  const out = { ...newDraft(rest.date), ...rest };
+  if (!rest.alcoholLog && alcohol) out.alcoholLog = Array.from({ length: alcohol }, () => ({ t: `${rest.date}T12:00` }));
+  return out;
 }
 
 function load() {
@@ -136,7 +172,8 @@ function load() {
         for (const d of Object.values(days)) delete d.backedUpAt;
       }
       // Older drafts predate meals/pages; archived days keep what they had (old days have a single 0–10 "diet").
-      const draft = { meals: emptyMeals(), pages: 0, ...migrate(raw.draft) };
+      const draft = upgradeDraft(raw.draft);
+      settings.tags ||= [...DEFAULT_TAGS];
       return { ...raw, schema: SCHEMA, draft, days, settings };
     }
   } catch (e) { console.warn(e); }
@@ -273,7 +310,7 @@ function changeDate(to) {
 function loadSaved(date) {
   const { savedAt, backedUpAt, backfill, ...d } = db.days[date];
   delete db.days[date];
-  draft = { ...newDraft(date), ...d, manualDate: date !== localDate() };
+  draft = { ...upgradeDraft(d), manualDate: date !== localDate() };
   save();
   renderToday();
   showView('today');
@@ -378,7 +415,7 @@ function paintPad() {
   $('padSet').disabled = !h || m.length === 1;
 }
 
-// opts: { title, value: 'HH:MM' | null, pm (AM/PM default when empty), onSet(hhmm), onClear? }
+// opts: { title, value: 'HH:MM' | null, pm (AM/PM default when empty), onSet(hhmm), onClear?, clearLabel? }
 function openPad(opts) {
   pad$.opts = opts;
   pad$.fresh = !!opts.value;
@@ -386,6 +423,7 @@ function openPad(opts) {
   else { pad$.h = ''; pad$.m = ''; pad$.pm = !!opts.pm; }
   $('padTitle').textContent = opts.title;
   $('padClear').style.visibility = opts.onClear ? 'visible' : 'hidden';
+  $('padClear').textContent = opts.clearLabel || 'Clear time';
   paintPad();
   $('padDialog').showModal();
 }
@@ -403,8 +441,8 @@ function openTimePad(key) {
 // Mood/note/dream times: anything before 5am belongs to the night after the entry's date.
 const entryStamp = hhmm => `${+hhmm.slice(0, 2) < 5 ? addDays(draft.date, 1) : draft.date}T${hhmm}`;
 
-function entryTimeButton(list, item, title, rerender) {
-  const b = el('button', 't', fmt12(item.t));
+function entryTimeButton(list, item, title, rerender, cls = 't') {
+  const b = el('button', cls, fmt12(item.t));
   b.setAttribute('aria-label', `Change time of ${title}`);
   b.addEventListener('click', () => openPad({
     title,
@@ -440,35 +478,51 @@ function bindPad() {
 // ---------------------------------------------------------------------------
 // Sliders, picks & exercise
 // ---------------------------------------------------------------------------
-// One slider per meal. Skipped (the default) dims the slider; touching it logs a rating.
-function mealEl(m) {
-  const wrap = el('div', 'scale meal');
+// A 5-step word slider. With offLabel (meals: "skipped") a toggle button shows the empty state;
+// without it, a × clears back to unrated.
+function tierSlider({ label, cls, tiers, stops, get, set, offLabel }) {
+  const wrap = el('div', `scale ${cls}`);
   const head = el('div', 'scalehead');
   const val = el('span', 'val');
-  const skip = el('button', 'skip', 'skipped');
+  const off = offLabel ? el('button', 'skip', offLabel) : el('button', 'clear', '×');
+  if (!offLabel) off.setAttribute('aria-label', `Clear ${label}`);
   const right = el('span', 'right');
-  right.append(val, skip);
-  head.append(el('span', 'name', m.label), right);
+  right.append(val, off);
+  head.append(el('span', 'name', label), right);
 
   const input = el('input', 'grad');
-  Object.assign(input, { type: 'range', min: 0, max: FOOD.tiers.length - 1, step: 1 });
-  input.style.setProperty('--grad', `linear-gradient(90deg, ${FOOD.stops.join(', ')})`);
-  input.setAttribute('aria-label', m.label);
+  Object.assign(input, { type: 'range', min: 0, max: tiers.length - 1, step: 1 });
+  input.style.setProperty('--grad', `linear-gradient(90deg, ${stops.join(', ')})`);
+  input.setAttribute('aria-label', label);
 
   const paint = () => {
-    const v = draft.meals[m.key];
+    const v = get();
     input.classList.toggle('unset', v == null);
-    input.value = v ?? 2;
-    val.textContent = v == null ? '' : FOOD.tiers[v];
-    val.style.color = v == null ? '' : FOOD.stops[v];
-    skip.classList.toggle('on', v == null);
+    input.value = v ?? Math.floor(tiers.length / 2);
+    val.textContent = v == null ? (offLabel ? '' : '—') : tiers[v];
+    val.style.color = v == null ? '' : stops[v];
+    if (offLabel) off.classList.toggle('on', v == null);
+    else off.style.visibility = v == null ? 'hidden' : 'visible';
   };
-  enhanceRange(input, v => { if (draft.meals[m.key] !== v) { draft.meals[m.key] = v; save(); } paint(); });
-  skip.addEventListener('click', () => { draft.meals[m.key] = null; save(); paint(); });
+  enhanceRange(input, v => { if (get() !== v) { set(v); save(); } paint(); });
+  off.addEventListener('click', () => { set(null); save(); paint(); });
 
   paint();
   wrap.append(head, input);
   return wrap;
+}
+
+// One slider per meal. Skipped (the default) dims the slider; touching it logs a rating.
+const mealEl = m => tierSlider({
+  label: m.label, cls: 'meal', ...FOOD, offLabel: 'skipped',
+  get: () => draft.meals[m.key], set: v => { draft.meals[m.key] = v; },
+});
+
+function renderProductivity() {
+  $('productivity').replaceChildren(tierSlider({
+    label: 'Productivity', cls: 'prod', ...PRODUCTIVITY,
+    get: () => draft.productivity, set: v => { draft.productivity = v; },
+  }));
 }
 
 function pickEl(p, cls = 'pickrow') {
@@ -485,11 +539,45 @@ function pickEl(p, cls = 'pickrow') {
   return row;
 }
 
+// One row per drink: tap + to log one now; tap a time to change it or delete it.
+function drinkEl(x) {
+  const row = el('div', 'drinkrow');
+  const list = draft[x.key];
+  const head = el('div', 'drinkhead');
+  head.append(el('span', 'name', `${x.emoji} ${x.label}`), el('span', list.length ? 'n' : 'n zero', String(list.length)));
+  const add = el('button', 'plus', '+');
+  add.setAttribute('aria-label', `Log ${x.label.toLowerCase()} now`);
+  add.addEventListener('click', () => {
+    list.push({ t: nowStamp() });
+    list.sort((a, b) => a.t.localeCompare(b.t));
+    save();
+    renderScales();
+    toast(`${x.emoji} logged at ${fmt12(nowStamp())}`);
+  });
+  head.append(add);
+
+  const times = el('div', 'drinktimes');
+  for (const item of list) {
+    const b = el('button', 'chip', fmt12(item.t));
+    b.addEventListener('click', () => openPad({
+      title: x.label,
+      value: item.t.slice(11),
+      clearLabel: 'Delete',
+      onSet: hhmm => { item.t = entryStamp(hhmm); list.sort((a, b) => a.t.localeCompare(b.t)); save(); renderScales(); },
+      onClear: () => { list.splice(list.indexOf(item), 1); save(); renderScales(); },
+    }));
+    times.append(b);
+  }
+  row.append(head);
+  if (list.length) row.append(times);
+  return row;
+}
+
 function renderScales() {
   const box = $('scales');
   box.replaceChildren(el('h2', null, 'Food & drink'));
   for (const m of MEALS) box.append(mealEl(m));
-  for (const p of PICKS.filter(p => p.card === 'scales')) box.append(pickEl(p));
+  for (const x of DRINKS) box.append(drinkEl(x));
 
   const intimacy = $('intimacy');
   const cols = el('div', 'pickcols');
@@ -702,6 +790,199 @@ function paintDial() {
 }
 
 // ---------------------------------------------------------------------------
+// Dream recall: none / yes, forgot / yes, remember. The dream box opens on "remember".
+// ---------------------------------------------------------------------------
+function renderDreamRecall() {
+  const pills = $('dreamRecall');
+  pills.replaceChildren();
+  for (const [key, label] of DREAM_RECALL) {
+    const b = el('button', draft.dreamRecall === key ? 'active' : null, label);
+    b.addEventListener('click', () => {
+      draft.dreamRecall = draft.dreamRecall === key ? null : key;
+      save();
+      renderDreamRecall();
+      if (draft.dreamRecall === 'remember') $('dreamsInput').focus();
+    });
+    pills.append(b);
+  }
+  $('dreamsForm').hidden = draft.dreamRecall !== 'remember';
+}
+
+// ---------------------------------------------------------------------------
+// Tags: only the day's tags show; the full list lives behind a sheet.
+// ---------------------------------------------------------------------------
+let tagEditing = false;
+
+function renderTags() {
+  const box = $('tagChips');
+  box.replaceChildren();
+  for (const t of draft.tags) box.append(el('span', 'chip on', t));
+  $('tagOpen').textContent = draft.tags.length ? 'edit' : '+ tags';
+}
+
+function paintTagSheet() {
+  const all = [...new Set([...db.settings.tags, ...draft.tags])];
+  const box = $('tagAll');
+  box.replaceChildren();
+  box.classList.toggle('editing', tagEditing);
+  for (const t of all) {
+    const b = el('button', draft.tags.includes(t) ? 'chip on' : 'chip', t);
+    if (tagEditing) b.append(el('span', 'x', '×'));
+    b.addEventListener('click', () => {
+      if (tagEditing) db.settings.tags = db.settings.tags.filter(x => x !== t);
+      else draft.tags = draft.tags.includes(t) ? draft.tags.filter(x => x !== t) : [...draft.tags, t];
+      save();
+      paintTagSheet();
+      renderTags();
+    });
+    box.append(b);
+  }
+  $('tagEdit').textContent = tagEditing ? 'done editing' : 'edit list';
+}
+
+function bindTags() {
+  $('tagOpen').addEventListener('click', () => { tagEditing = false; paintTagSheet(); $('tagDialog').showModal(); });
+  $('tagChips').addEventListener('click', () => $('tagOpen').click());
+  $('tagEdit').addEventListener('click', () => { tagEditing = !tagEditing; paintTagSheet(); });
+  $('tagDone').addEventListener('click', () => $('tagDialog').close());
+  $('tagForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const t = $('tagInput').value.trim().toLowerCase();
+    if (!t) return;
+    if (!db.settings.tags.includes(t)) db.settings.tags = [...db.settings.tags, t];
+    if (!draft.tags.includes(t)) draft.tags = [...draft.tags, t];
+    $('tagInput').value = '';
+    save();
+    paintTagSheet();
+    renderTags();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Energy (Thayer): one tap on the square logs energy × tension at the current time.
+// ---------------------------------------------------------------------------
+const ENERGY_PAD = 200; // square side in SVG units
+const energyCell = ENERGY_PAD / ENERGY.size;
+
+function energyColor(energy, tension) {
+  const { tl, tr, bl, br } = ENERGY.corners;
+  const fx = (tension - 1) / (ENERGY.size - 1), fy = (energy - 1) / (ENERGY.size - 1);
+  return mix(mix(bl, br, fx), mix(tl, tr, fx), fy);
+}
+
+function energyWord(e) {
+  const words = [e.tension <= 2 ? 'calm' : e.tension >= 4 ? 'tense' : '', e.energy >= 4 ? 'energized' : e.energy <= 2 ? 'tired' : ''];
+  return words.filter(Boolean).join(' · ') || 'neutral';
+}
+
+// Square center of a cell: energy runs bottom → top, tension left → right.
+const energyXY = e => [(e.tension - 0.5) * energyCell, (ENERGY.size - e.energy + 0.5) * energyCell];
+
+function buildEnergy() {
+  const root = $('energyPad');
+  for (let energy = 1; energy <= ENERGY.size; energy++) {
+    for (let tension = 1; tension <= ENERGY.size; tension++) {
+      const [cx, cy] = energyXY({ energy, tension });
+      root.append(svg('rect', {
+        x: cx - energyCell / 2, y: cy - energyCell / 2, width: energyCell, height: energyCell,
+        fill: energyColor(energy, tension), class: 'cell',
+      }));
+    }
+  }
+  const half = ENERGY_PAD / 2;
+  for (const [x, y, label] of [[8, 14, 'calm energy'], [192, 14, 'tense energy'], [8, 190, 'calm tired'], [192, 190, 'tense tired']]) {
+    const t = svg('text', { x, y, class: 'corner', 'text-anchor': x < half ? 'start' : 'end' });
+    t.textContent = label;
+    root.append(t);
+  }
+  root.append(svg('polyline', { class: 'trail' }), svg('g', { class: 'dots' }));
+
+  root.addEventListener('click', e => {
+    const r = root.getBoundingClientRect();
+    const col = Math.min(ENERGY.size - 1, Math.floor(((e.clientX - r.left) / r.width) * ENERGY.size));
+    const row = Math.min(ENERGY.size - 1, Math.floor(((e.clientY - r.top) / r.height) * ENERGY.size));
+    const entry = { t: nowStamp(), energy: ENERGY.size - row, tension: col + 1 };
+    draft.energy.push(entry);
+    draft.energy.sort((a, b) => a.t.localeCompare(b.t));
+    save();
+    renderEnergy();
+    toast(`Logged ${energyWord(entry)}`);
+  });
+}
+
+function renderEnergy() {
+  const root = $('energyPad');
+  const pts = draft.energy.map(energyXY);
+  root.querySelector('.trail').setAttribute('points', pts.map(p => p.join(',')).join(' '));
+  const dots = root.querySelector('.dots');
+  dots.replaceChildren();
+  pts.forEach(([cx, cy], i) => dots.append(svg('circle', { cx, cy, r: i === pts.length - 1 ? 9 : 6, class: i === pts.length - 1 ? 'last' : '' })));
+
+  const list = $('energyList');
+  list.replaceChildren();
+  draft.energy.forEach((e, idx) => {
+    const li = el('li');
+    const dot = el('span', 'dot');
+    dot.style.background = energyColor(e.energy, e.tension);
+    const del = el('button', null, '×');
+    del.addEventListener('click', () => { draft.energy.splice(idx, 1); save(); renderEnergy(); });
+    li.append(dot, entryTimeButton(draft.energy, e, 'Energy', renderEnergy), el('span', 'f', energyWord(e)),
+      el('span', 'i', `E${e.energy} T${e.tension}`), del);
+    list.append(li);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Social: pick who, then tap how it left you to log it.
+// ---------------------------------------------------------------------------
+let socialWho = [];
+
+function renderSocial() {
+  const who = $('socialWho');
+  who.replaceChildren();
+  for (const w of SOCIAL.who) {
+    const b = el('button', socialWho.includes(w) ? 'chip on' : 'chip', w);
+    b.addEventListener('click', () => {
+      socialWho = socialWho.includes(w) ? socialWho.filter(x => x !== w) : [...socialWho, w];
+      renderSocial();
+    });
+    who.append(b);
+  }
+
+  const fx = $('socialEffect');
+  fx.hidden = !socialWho.length;
+  fx.replaceChildren(el('span', 'lead', 'left me'));
+  const row = el('div', 'effects');
+  for (const [effect, label, color] of SOCIAL.effects) {
+    const b = el('button', null, label);
+    b.style.setProperty('--c', color);
+    b.addEventListener('click', () => {
+      draft.social.push({ t: nowStamp(), who: SOCIAL.who.filter(w => socialWho.includes(w)), effect });
+      draft.social.sort((a, b) => a.t.localeCompare(b.t));
+      socialWho = [];
+      save();
+      renderSocial();
+      toast(`Logged · ${label}`);
+    });
+    row.append(b);
+  }
+  fx.append(row);
+
+  const list = $('socialList');
+  list.replaceChildren();
+  draft.social.forEach((x, idx) => {
+    const [, label, color] = SOCIAL.effects.find(([e]) => e === x.effect);
+    const li = el('li');
+    const dot = el('span', 'dot');
+    dot.style.background = color;
+    const del = el('button', null, '×');
+    del.addEventListener('click', () => { draft.social.splice(idx, 1); save(); renderSocial(); });
+    li.append(dot, entryTimeButton(draft.social, x, 'Social', renderSocial), el('span', 'f', x.who.join(', ')), el('span', 'i', label), del);
+    list.append(li);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Text logs (notes, dreams): timestamped one-liners
 // ---------------------------------------------------------------------------
 const LOGS = ['notes', 'dreams'];
@@ -725,6 +1006,7 @@ function bindLog(key) {
     const text = input.value.trim();
     if (!text) return;
     draft[key].push({ t: nowStamp(), text });
+    if (key === 'dreams') { draft.dreamRecall = 'remember'; renderDreamRecall(); }
     draft[key].sort((a, b) => a.t.localeCompare(b.t));
     input.value = '';
     input.blur();
@@ -791,6 +1073,7 @@ const CHECKS = [
   { label: 'food', ok: d => Object.values(d.meals).some(v => v != null), target: '#scales .meal' },
   { label: 'mood', ok: d => d.moods.length, target: '#wheel' },
   { label: 'bed time', ok: d => d.bed, target: '#bed' },
+  { label: 'productivity', ok: d => d.productivity != null, target: '#productivity .scale' },
   { label: 'day rating', ok: d => d.dayRating != null, target: '[data-rate="dayRating"]' },
 ];
 
@@ -849,6 +1132,7 @@ function withDerived(days) {
     const prev = db.days[addDays(d.date, -1)];
     const { backedUpAt, ...out } = d;
     out.exerciseIntensity = dayIntensity(d.exercise);
+    for (const x of DRINKS) if (d[x.key]) out[x.count] = d[x.key].length;
     if (prev?.bed && d.wake) {
       const h = (new Date(d.wake) - new Date(prev.bed)) / 36e5;
       if (h > 0 && h < 24) out.sleepHours = Math.round(h * 100) / 100;
@@ -962,6 +1246,12 @@ function foodColor(d) {
   return d.diet == null ? null : sampleStops(FOOD.stops, d.diet / 10);
 }
 
+// Days before schema 4 store a plain 0–3 alcohol count instead of a log.
+const drinkCount = (d, count) => {
+  const x = DRINKS.find(x => x.count === count);
+  return d[x.key] ? d[x.key].length : d[count] || 0;
+};
+
 function barColors(d) {
   const moods = d.moods || [];
   const moodColors = moods.map(m => feelingColor(m.core, m.feeling));
@@ -972,7 +1262,7 @@ function barColors(d) {
       : `linear-gradient(90deg, ${moodColors.join(', ')})`,
     food: foodColor(d),
     move: dayIntensity(d.exercise) ? INTENSITY[dayIntensity(d.exercise)].color : '#4a4a56', // rest = dark grey
-    drinks: !d.alcohol ? null : mix('#5a3d12', '#f2a93b', (d.alcohol - 1) / 2),
+    drinks: !drinkCount(d, 'alcohol') ? null : mix('#5a3d12', '#f2a93b', Math.min(1, (drinkCount(d, 'alcohol') - 1) / 2)),
     read: !d.pages ? null : mix('#4a4030', '#f3dca6', d.pages / PAGES.max),
   };
 }
@@ -1108,7 +1398,12 @@ function renderToday() {
   renderScales();
   renderExercise();
   paintDial();
+  renderEnergy();
   renderMoods();
+  renderDreamRecall();
+  renderTags();
+  renderSocial();
+  renderProductivity();
   LOGS.forEach(renderLog);
   document.querySelectorAll('.stars').forEach(paintStars);
   renderChecklist();
@@ -1128,6 +1423,8 @@ rollForward();
 bindTimes();
 buildWheel();
 buildDial();
+buildEnergy();
+bindTags();
 bindMood();
 bindPad();
 bindArchive();

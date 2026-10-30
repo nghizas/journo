@@ -43,7 +43,7 @@ When you change the app, bump `VERSION` in `web/sw.js`.
 
 ```json
 {
-  "app": "journo", "schema": 3, "range": "2026-10", "exportedAt": "…",
+  "app": "journo", "schema": 4, "range": "2026-10", "exportedAt": "…",
   "days": [{
     "date": "2026-10-15",
     "wake": "2026-10-15T07:10",
@@ -51,14 +51,21 @@ When you change the app, bump `VERSION` in `web/sw.js`.
     "sleepHours": 7.5,
     "sleepRating": 4,
     "dayRating": 4,
+    "dreamRecall": "remember",
     "dreams": [{ "t": "2026-10-15T07:15", "text": "flying over a city" }],
     "meals": { "breakfast": null, "lunch": 3, "dinner": 2, "other": null },
     "pages": 15,
-    "alcohol": 1,
+    "caffeineLog": [{ "t": "2026-10-15T08:05" }, { "t": "2026-10-15T13:40" }],
+    "alcoholLog": [{ "t": "2026-10-15T19:30" }],
+    "caffeine": 2, "alcohol": 1,
     "exercise": ["bootcamp", "other"],
     "exerciseIntensity": 2,
     "sexPartner": 1, "sexSolo": 0,
     "moods": [{ "t": "2026-10-15T14:02", "core": "happy", "feeling": "optimistic", "nuance": "hopeful", "intensity": 4 }],
+    "energy": [{ "t": "2026-10-15T15:10", "energy": 2, "tension": 4 }],
+    "social": [{ "t": "2026-10-15T19:00", "who": ["friends", "partner"], "effect": 2 }],
+    "productivity": 3,
+    "tags": ["travel", "late night"],
     "notes": [{ "t": "2026-10-15T13:27", "text": "coffee with a friend" }],
     "savedAt": "…"
   }]
@@ -69,8 +76,14 @@ When you change the app, bump `VERSION` in `web/sw.js`.
 - `pages` is pages read, 0–50 in steps of 5, where 50 = 50+.
 - `moods`: `core` → `feeling` → optional `nuance`, from the Willcox feelings wheel plus an added `calm` core.
 - `sleepRating` / `dayRating` are 1–5; `null` = not rated.
-- `alcohol` is 0–3 where 3 = 3+. `sexPartner` / `sexSolo` are 0–2 where 2 = 2+.
+- `caffeineLog` / `alcoholLog`: one entry per drink with its time. `caffeine` / `alcohol` are the counts, added at export. Days before schema 4 have only `alcohol` as a 0–3 count (3 = 3+).
+- `dreamRecall`: `"none"`, `"forgot"`, `"remember"`, or `null` = not answered.
+- `energy`: Thayer's model, each 1–5. `energy` tired → energized, `tension` calm → tense.
+- `tags`: free-form strings picked from your tag list.
+- `social`: one entry per interaction. `who` ⊂ partner, family, friends, work, new people. `effect` −2 drained, −1 flat, 0 fine, 1 good, 2 recharged. `[]` = alone (or not logged).
+- `productivity`: 0–4 (jack shit, phoned it in, got by, crushed it, full scale domination). `null` = not rated.
+- `sexPartner` / `sexSolo` are 0–2 where 2 = 2+.
 - `exercise`: activity keys (`yoga`, `bootcamp`, `orangetheory`, `sweep`, `other`); `[]` = rest day (the default). `exerciseIntensity` is derived at export as the hardest activity of the day: 2 intense (yoga/boot/otf), 1 moderate (sweep/other), 0 rest.
 - A bed time before noon is stored as the next calendar date. `sleepHours` = this day's `wake` − previous day's `bed`.
 - Days you filled in later are marked `"backfill": true`.
-- Everything you track is defined at the top of `web/app.js`: the `MEALS`, `FOOD`, `PAGES`, `PICKS`, `EXERCISE`, `INTENSITY` and `WHEEL` lists.
+- Everything you track is defined at the top of `web/app.js`: the `MEALS`, `FOOD`, `PAGES`, `DRINKS`, `DREAM_RECALL`, `DEFAULT_TAGS`, `ENERGY`, `SOCIAL`, `PRODUCTIVITY`, `PICKS`, `EXERCISE`, `INTENSITY` and `WHEEL` lists.

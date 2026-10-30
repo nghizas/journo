@@ -10,6 +10,7 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -359,3 +360,64 @@ dialog.pad { padding: 18px 18px 10px; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .primary:disabled { opacity: .35; }
+
+/* ---- dream recall ---- */
+.pills.recall { margin-bottom: 10px; }
+.pills.recall button { flex: 1; min-width: 0; padding: 0 4px; font-size: 13px; font-weight: 550; white-space: nowrap; }
+
+/* ---- drinks ---- */
+.drinkrow { margin-top: 18px; }
+.drinkhead { display: flex; align-items: center; gap: 10px; }
+.drinkhead .name { flex: 1; font-weight: 550; }
+.drinkhead .n { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.drinkhead .n.zero { color: var(--muted); }
+.plus {
+  width: 44px; height: 38px; border: 0; border-radius: 12px;
+  background: var(--line); color: var(--text); font-size: 22px; line-height: 1;
+}
+.plus:active { background: var(--accent); color: #17132a; }
+.drinktimes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* chips: drink times, tags */
+.chip {
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  border-radius: 999px; padding: 5px 11px; font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.chip.on { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* ---- tags ---- */
+.tagrow { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.tagrow .name { flex: none; }
+.tagchips { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.ghost.small { padding: 5px 11px; font-size: 13px; border-radius: 999px; color: var(--muted); }
+dialog.tags { padding: 18px 18px 10px; }
+.tagall { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 16px; }
+.tagall .chip { font-size: 15px; padding: 7px 13px; }
+.tagall.editing .chip { border-style: dashed; color: var(--danger); }
+.tagall .chip .x { margin-left: 6px; }
+
+/* ---- energy square ---- */
+#energyPad { width: 100%; max-width: 360px; display: block; margin: 0 auto; border-radius: 14px; touch-action: manipulation; cursor: pointer; }
+#energyPad .cell { opacity: .55; stroke: var(--card); stroke-width: 1; }
+#energyPad .corner { fill: #15131c; font-size: 9px; font-weight: 600; opacity: .7; pointer-events: none; }
+#energyPad .trail { fill: none; stroke: #fff; stroke-width: 1.5; stroke-opacity: .5; stroke-dasharray: 3 3; pointer-events: none; }
+#energyPad .dots circle { fill: #fff; fill-opacity: .55; pointer-events: none; }
+#energyPad .dots circle.last { fill-opacity: 1; stroke: #15131c; stroke-width: 2; }
+.energyaxes { display: flex; justify-content: space-between; max-width: 360px; margin: 6px auto 0; font-size: 12px; color: var(--muted); }
+#energyList { margin-top: 10px; }
+
+/* ---- social ---- */
+.socialwho { display: flex; flex-wrap: wrap; gap: 8px; }
+.socialwho .chip { font-size: 15px; padding: 7px 13px; }
+.socialfx { margin-top: 14px; }
+.socialfx .lead { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.effects { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.effects button {
+  border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 14%, transparent);
+  color: var(--text); border-radius: 12px; padding: 10px 0; font-size: 12px; font-weight: 550; letter-spacing: -.01em;
+}
+.effects button:active { background: var(--c); color: #15131c; }
+#socialList .f { text-transform: none; }
+
+/* ---- productivity ---- */
+.prod .name { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }

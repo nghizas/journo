@@ -43,7 +43,8 @@
         <div class="stars zs" data-rate="sleepRating" data-glyph="Z"></div>
       </div>
       <h3 class="sub-h">Dreams</h3>
-      <form class="noteadd" id="dreamsForm">
+      <div class="pills recall" id="dreamRecall"></div>
+      <form class="noteadd" id="dreamsForm" hidden>
         <input type="text" id="dreamsInput" placeholder="a scene, a person, a feeling…" autocomplete="off" enterkeyhint="done">
         <button class="primary">Add</button>
       </form>
@@ -64,6 +65,13 @@
     </section>
 
     <section class="card">
+      <h2>Energy</h2>
+      <svg id="energyPad" viewBox="0 0 200 200" aria-label="Energy: tap where you are"></svg>
+      <div class="energyaxes"><span>← calm</span><span>tense →</span></div>
+      <ul class="moodlist" id="energyList"></ul>
+    </section>
+
+    <section class="card">
       <h2>Mood</h2>
       <svg id="wheel" viewBox="-160 -160 320 320" aria-label="Emotion wheel"></svg>
       <div class="moodpick" id="moodPick" hidden>
@@ -77,6 +85,15 @@
         <button class="primary" id="moodLog">Log feeling</button>
       </div>
       <ul class="moodlist" id="moodList"></ul>
+    </section>
+
+    <section class="card" id="productivity"></section>
+
+    <section class="card">
+      <h2>Social</h2>
+      <div class="socialwho" id="socialWho"></div>
+      <div class="socialfx" id="socialEffect" hidden></div>
+      <ul class="moodlist" id="socialList"></ul>
     </section>
 
     <section class="card" id="intimacy"></section>
@@ -100,6 +117,11 @@
       <div class="raterow">
         <span class="name">Day rating</span>
         <div class="stars" data-rate="dayRating"></div>
+      </div>
+      <div class="tagrow">
+        <span class="name">Tags</span>
+        <div class="tagchips" id="tagChips"></div>
+        <button class="ghost small" id="tagOpen">+ tags</button>
       </div>
       <div class="checklist" id="checklist"></div>
       <button class="primary big" id="endDay">End day &amp; save</button>
@@ -144,6 +166,17 @@
       <button class="ghost" id="dayDelete">Delete</button>
       <button class="ghost" id="dayClose">Close</button>
     </div>
+  </dialog>
+
+  <dialog id="tagDialog" class="tags">
+    <div class="padtitle">Tags</div>
+    <div class="tagall" id="tagAll"></div>
+    <form class="noteadd" id="tagForm">
+      <input type="text" id="tagInput" placeholder="new tag" autocomplete="off" enterkeyhint="done">
+      <button class="primary">Add</button>
+    </form>
+    <button class="primary big" id="tagDone">Done</button>
+    <button class="link" id="tagEdit">edit list</button>
   </dialog>
 
   <dialog id="askDialog" class="ask">
