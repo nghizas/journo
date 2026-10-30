@@ -420,4 +420,12 @@ dialog.tags { padding: 18px 18px 10px; }
 #socialList .f { text-transform: none; }
 
 /* ---- productivity ---- */
+/* emoji riding the thumb: thumb is 30px wide, so its center runs from 15px to (100% − 15px) */
+.scale .track { position: relative; }
+.rider {
+  position: absolute; top: 50%; left: calc(15px + var(--f) * (100% - 30px));
+  transform: translate(-50%, -50%); font-size: 19px; line-height: 1; pointer-events: none;
+}
+.rider.unset { filter: grayscale(1); opacity: .5; }
+.scalehead .val .tieremo { font-size: 20px; line-height: 0; margin-right: 6px; vertical-align: -2px; }
 .prod .name { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }

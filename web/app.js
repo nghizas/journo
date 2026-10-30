@@ -31,7 +31,8 @@ const DRINKS = [
 // Productivity: one end-of-day score, 0–4. null = not rated.
 const PRODUCTIVITY = {
   tiers: ['jack shit', 'phoned it in', 'got by', 'crushed it', 'full scale domination'],
-  stops: ['#4a4858', '#7d6fa8', '#b9a6ff', '#f2c94c', '#ffe27a'],
+  emojis: ['💩', '☎️', '👍', '💪', '👑'],
+  stops: ['#4b5563', '#55707f', '#4f95a6', '#2fc6d6', '#00f0ff'],
 };
 
 // Social: one entry per interaction that mattered. effect −2 drained … +2 recharged. No entries = a day alone.
@@ -479,8 +480,8 @@ function bindPad() {
 // Sliders, picks & exercise
 // ---------------------------------------------------------------------------
 // A 5-step word slider. With offLabel (meals: "skipped") a toggle button shows the empty state;
-// without it, a × clears back to unrated.
-function tierSlider({ label, cls, tiers, stops, get, set, offLabel }) {
+// without it, a × clears back to unrated. With emojis, the tier's emoji rides on the thumb and sits by the words.
+function tierSlider({ label, cls, tiers, stops, emojis, get, set, offLabel }) {
   const wrap = el('div', `scale ${cls}`);
   const head = el('div', 'scalehead');
   const val = el('span', 'val');
@@ -494,13 +495,24 @@ function tierSlider({ label, cls, tiers, stops, get, set, offLabel }) {
   Object.assign(input, { type: 'range', min: 0, max: tiers.length - 1, step: 1 });
   input.style.setProperty('--grad', `linear-gradient(90deg, ${stops.join(', ')})`);
   input.setAttribute('aria-label', label);
+  const track = el('div', 'track');
+  const rider = emojis && el('span', 'rider');
+  track.append(input);
+  if (rider) track.append(rider);
 
   const paint = () => {
     const v = get();
+    const shown = v ?? Math.floor(tiers.length / 2);
     input.classList.toggle('unset', v == null);
-    input.value = v ?? Math.floor(tiers.length / 2);
+    input.value = shown;
     val.textContent = v == null ? (offLabel ? '' : '—') : tiers[v];
-    val.style.color = v == null ? '' : stops[v];
+    if (emojis) {
+      if (v != null) val.prepend(el('span', 'tieremo', emojis[v]));
+      rider.textContent = emojis[shown];
+      rider.classList.toggle('unset', v == null);
+      rider.style.setProperty('--f', shown / (tiers.length - 1));
+    }
+    val.style.color = v == null ? '' : mix(stops[v], '#ecebf0', 0.3); // lifted so the darkest tier stays readable
     if (offLabel) off.classList.toggle('on', v == null);
     else off.style.visibility = v == null ? 'hidden' : 'visible';
   };
@@ -508,7 +520,7 @@ function tierSlider({ label, cls, tiers, stops, get, set, offLabel }) {
   off.addEventListener('click', () => { set(null); save(); paint(); });
 
   paint();
-  wrap.append(head, input);
+  wrap.append(head, track);
   return wrap;
 }
 
