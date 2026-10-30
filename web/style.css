@@ -108,13 +108,7 @@ button { font: inherit; cursor: pointer; }
   border: 0; background: none; color: var(--muted); font-size: 14px;
 }
 
-/* ---- backup settings ---- */
-.seg { display: flex; background: var(--line); border-radius: 12px; padding: 3px; margin-bottom: 10px; }
-.seg button {
-  flex: 1; border: 0; background: none; color: var(--muted);
-  padding: 8px 4px; border-radius: 9px; font-size: 14px;
-}
-.seg button.active { background: var(--accent); color: #17132a; font-weight: 600; }
+/* ---- export ---- */
 details { margin-top: 12px; font-size: 14px; }
 summary { color: var(--accent); cursor: pointer; }
 .steps { padding-left: 20px; color: var(--muted); }
@@ -219,7 +213,7 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
 /* ---- exercise ---- */
 .card h2.split { display: flex; justify-content: space-between; }
 .card h2 .intensity { letter-spacing: .08em; }
-.emojis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.emojis { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px; }
 .emo {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   border: 1px solid var(--line); background: none; color: var(--muted);
@@ -229,6 +223,30 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
 .emo .l { font-size: 12px; font-weight: 600; }
 .emo.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, transparent); color: var(--text); }
 .emo.on .e { filter: none; opacity: 1; transform: scale(1.1); }
+.emo { position: relative; }
+.emo:disabled { opacity: .3; }
+.emo.edit .e { font-size: 24px; height: 28px; filter: none; }
+.emo .badge { position: absolute; top: 3px; right: 5px; font-size: 10px; font-weight: 700; color: var(--text); }
+.sessions .f { text-transform: none; }
+.cyc {
+  border: 1px solid var(--line) !important; border-radius: 999px; padding: 3px 9px !important;
+  font-size: 13px !important; color: var(--text) !important; font-variant-numeric: tabular-nums;
+}
+.cyc + .cyc { margin-left: -4px; }
+
+/* ---- activity editor ---- */
+dialog.acts { padding: 18px 14px 10px; }
+dialog.acts .muted { text-align: center; font-size: 13px; margin: 6px 0 12px; }
+.actrow { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-top: 1px solid var(--line); }
+.actrow input, .actrow select {
+  background: var(--line); color: var(--text); border: 0; border-radius: 10px;
+  padding: 8px 6px; font: inherit; font-size: 16px;
+}
+.actrow .actemoji { width: 44px; text-align: center; flex: none; }
+.actrow .actname { flex: 1; min-width: 0; }
+.actrow select { flex: none; -webkit-appearance: none; appearance: none; padding: 8px 8px; }
+.actdel { border: 0; background: none; color: var(--muted); font-size: 20px; padding: 0 2px; }
+#actAdd { width: 100%; margin-top: 10px; }
 
 /* ---- emotion wheel ---- */
 #wheel { width: 100%; max-width: 360px; display: block; margin: 0 auto; touch-action: manipulation; }
@@ -312,7 +330,6 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
 .dayrow.legend { padding: 0 0 6px; border-top: 0; cursor: default; }
 .dayrow.legend .daybar { height: auto; overflow: visible; }
 .dayrow.legend .daybar span { font-size: 11px; line-height: 1; text-align: center; opacity: .8; background: none; }
-.seg button:disabled { opacity: .35; }
 .dayrow .bk { width: 16px; text-align: center; font-size: 10px; color: #ffb86b; }
 .dayrow .bk.ok { font-size: 14px; color: var(--muted); }
 .empty { color: var(--muted); text-align: center; padding: 30px 0; }

@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // Config — add/remove metrics here. Keys become fields in the exported JSON.
 // ---------------------------------------------------------------------------
-const SCHEMA = 4;
+const SCHEMA = 5;
 const STORE_KEY = 'journo.v1';
 
 // Each meal is skipped (null, the default) or a 0–4 rating: trash, junk, mixed, clean, dialed.
@@ -56,21 +56,36 @@ const PICKS = [
   { key: 'sexSolo', label: 'Solo', card: 'intimacy', options: ['0', '1', '2+'] },
 ];
 
-// Exercise is a set of activities; nothing picked = rest day.
-// Day intensity = the hardest thing you did: 2 intense, 1 moderate, 0 rest.
-const INTENSITY = [
-  { label: 'rest', color: '#8b8a96' },
+// Exercise: a list of sessions { t, type, minutes, effort }. null = not logged, [] = rest day.
+// Activities (type, emoji, default minutes/effort) are editable in the app and kept in settings.
+const EFFORT = [
+  { label: 'easy', color: '#7fb6e0' },
   { label: 'moderate', color: '#4fb8ab' },
-  { label: 'intense', color: '#ef6f5e' },
+  { label: 'hard', color: '#ef6f5e' },
 ];
-const EXERCISE = [
-  { key: 'yoga', emoji: '🐅', label: 'Yoga', intensity: 2 },
-  { key: 'bootcamp', emoji: '🏋️', label: 'Boot', intensity: 2 },
-  { key: 'orangetheory', emoji: '🍊', label: 'OTF', intensity: 2 },
-  { key: 'sweep', emoji: '🧹', label: 'Sweep', intensity: 1 },
-  { key: 'other', emoji: '🚶', label: 'Other', intensity: 1 },
+const REST_COLOR = '#4a4a56';
+const MINUTE_STEPS = [10, 15, 20, 30, 45, 60, 75, 90, 120];
+const STARTER_ACTIVITIES = [
+  { key: 'walk', emoji: '🚶', label: 'Walk', minutes: 30, effort: 0 },
+  { key: 'run', emoji: '🏃', label: 'Run', minutes: 30, effort: 2 },
+  { key: 'bike', emoji: '🚴', label: 'Bike', minutes: 45, effort: 1 },
+  { key: 'lift', emoji: '🏋️', label: 'Lift', minutes: 45, effort: 2 },
+  { key: 'yoga', emoji: '🧘', label: 'Yoga', minutes: 60, effort: 1 },
+  { key: 'swim', emoji: '🏊', label: 'Swim', minutes: 30, effort: 1 },
+  { key: 'sport', emoji: '⚽', label: 'Sport', minutes: 60, effort: 2 },
+  { key: 'other', emoji: '➕', label: 'Other', minutes: 30, effort: 1 },
 ];
-const dayIntensity = keys => Math.max(0, ...(keys || []).map(k => EXERCISE.find(x => x.key === k)?.intensity ?? 0));
+// The set this app grew up with; used instead of the starter set if your history already has these.
+const ORIGINAL_ACTIVITIES = [
+  { key: 'yoga', emoji: '🐅', label: 'Yoga', minutes: 60, effort: 2 },
+  { key: 'bootcamp', emoji: '🏋️', label: 'Boot', minutes: 45, effort: 2 },
+  { key: 'orangetheory', emoji: '🍊', label: 'OTF', minutes: 60, effort: 2 },
+  { key: 'other', emoji: '🚶', label: 'Other', minutes: 30, effort: 1 },
+];
+// Effort for days logged before sessions existed (a list of activity names).
+const LEGACY_EFFORT = { yoga: 2, bootcamp: 2, orangetheory: 2, sweep: 1, other: 1 };
+const dayEffort = list => (list?.length ? Math.max(...list.map(x => x.effort)) : null);
+const dayMinutes = list => (list || []).reduce((s, x) => s + (x.minutes || 0), 0);
 
 // Willcox feelings wheel: core → feeling (wheel ring) → nuance (chips after you pick a feeling).
 // "calm" is our addition: the original wheel has no low-energy, okay-to-good states.
@@ -118,9 +133,7 @@ const prettyDate = iso => parseDate(iso).toLocaleDateString(undefined, { weekday
 // ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
-// Home-screen (standalone) apps on iOS show downloads instead of saving them, so they must use the share sheet.
-const STANDALONE = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-const DEFAULT_SETTINGS = { backup: STANDALONE ? 'share' : 'download', tags: DEFAULT_TAGS };
+const DEFAULT_SETTINGS = { tags: DEFAULT_TAGS, activities: STARTER_ACTIVITIES };
 
 function newDraft(date = localDate()) {
   const d = { date, wake: null, bed: null, sleepRating: null, dayRating: null, dreamRecall: null, dreams: [], moods: [], energy: [], social: [], notes: [], tags: [], productivity: null };
@@ -128,7 +141,7 @@ function newDraft(date = localDate()) {
   d.pages = 0;
   for (const x of DRINKS) d[x.key] = [];
   for (const p of PICKS) d[p.key] = 0;
-  d.exercise = [];
+  d.exercise = null;
   return d;
 }
 
@@ -137,23 +150,29 @@ function isEmpty(d) {
     && d.sleepRating == null && d.dayRating == null
     && d.diet == null && Object.values(d.meals || {}).every(v => v == null) && !d.pages
     && !d.dreamRecall && !d.energy?.length && !d.social?.length && d.productivity == null && !d.tags?.length && DRINKS.every(x => !d[x.key]?.length) && !d.alcohol
-    && PICKS.every(p => !d[p.key]) && !d.exercise?.length;
+    && PICKS.every(p => !d[p.key]) && d.exercise == null;
 }
 
-// Upgrades entries saved by earlier versions: exercise always an array (rest = []);
-// "housework" → "sweep", "walk"/"misc" → "other"; single note → timestamped notes list; ratings and dreams added.
+// Upgrades entries saved by earlier versions: exercise names become sessions with no time or length
+// ("housework" → "sweep", "walk"/"misc" → "other"; [] stays a rest day); single note → timestamped notes list;
+// ratings and dreams added.
 function migrate(d) {
   const { note, ...rest } = d;
   const renamed = { housework: 'sweep', walk: 'other', misc: 'other' };
-  const exercise = (rest.exercise || []).map(k => renamed[k] || k);
+  const exercise = rest.exercise === null ? null : (rest.exercise || []).map(x => {
+    if (typeof x !== 'string') return x;
+    const type = renamed[x] || x;
+    return { t: null, type, minutes: null, effort: LEGACY_EFFORT[type] ?? 1 };
+  });
   const notes = rest.notes || (note ? [{ t: `${rest.date}T12:00`, text: note }] : []);
   const whole = v => (v == null ? null : Math.ceil(v));
   return { ...rest, sleepRating: whole(rest.sleepRating), dayRating: whole(rest.dayRating), dreams: rest.dreams || [], exercise, notes };
 }
 
 // Fills in fields added since the entry was made. An old 0–3 alcohol count becomes that many noon entries.
-function upgradeDraft(d) {
+function upgradeDraft(d, schema = SCHEMA) {
   const { alcohol, ...rest } = migrate(d);
+  if (schema < 5 && !rest.exercise?.length) rest.exercise = null; // [] used to be the untouched default
   const out = { ...newDraft(rest.date), ...rest };
   if (!rest.alcoholLog && alcohol) out.alcoholLog = Array.from({ length: alcohol }, () => ({ t: `${rest.date}T12:00` }));
   return out;
@@ -164,21 +183,20 @@ function load() {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY));
     if (raw && raw.draft && raw.days) {
       const settings = { ...DEFAULT_SETTINGS, ...raw.settings };
-      if (!['download', 'share'].includes(settings.backup)) settings.backup = DEFAULT_SETTINGS.backup;
       delete settings.shortcut;
+      delete settings.backup; // exports always go through the share sheet now
       const days = Object.fromEntries(Object.entries(raw.days).map(([k, d]) => [k, migrate(d)]));
-      // Downloads in home-screen mode only previewed the file, so those "backed up" marks weren't real.
-      if (STANDALONE && settings.backup === 'download') {
-        settings.backup = 'share';
-        for (const d of Object.values(days)) delete d.backedUpAt;
-      }
       // Older drafts predate meals/pages; archived days keep what they had (old days have a single 0–10 "diet").
-      const draft = upgradeDraft(raw.draft);
+      const draft = upgradeDraft(raw.draft, raw.schema);
       settings.tags ||= [...DEFAULT_TAGS];
+      if (!raw.settings?.activities) {
+        const used = new Set([raw.draft, ...Object.values(raw.days)].flatMap(d => d.exercise || []).map(x => x.type || x));
+        settings.activities = structuredClone(['yoga', 'bootcamp', 'orangetheory'].some(k => used.has(k)) ? ORIGINAL_ACTIVITIES : STARTER_ACTIVITIES);
+      }
       return { ...raw, schema: SCHEMA, draft, days, settings };
     }
   } catch (e) { console.warn(e); }
-  return { schema: SCHEMA, draft: newDraft(), days: {}, settings: { ...DEFAULT_SETTINGS } };
+  return { schema: SCHEMA, draft: newDraft(), days: {}, settings: structuredClone(DEFAULT_SETTINGS) };
 }
 
 let db = load();
@@ -267,7 +285,7 @@ function renderHeader() {
 
   const n = Object.keys(db.days).length;
   const pending = unbackedDays().length;
-  $('draftSub').textContent = `${n} day${n === 1 ? '' : 's'} archived` + (pending ? ` · ${pending} not backed up` : ' · all backed up');
+  $('draftSub').textContent = `${n} day${n === 1 ? '' : 's'} archived` + (pending ? ` · ${pending} not exported` : n ? ' · all exported' : '');
   $('draftSub').classList.toggle('warn', pending > 0);
 
   const banner = $('staleBanner');
@@ -597,29 +615,156 @@ function renderScales() {
   intimacy.replaceChildren(el('h2', null, 'Intimacy'), cols);
 }
 
+const activity = type => db.settings.activities.find(a => a.key === type)
+  || { key: type, emoji: '•', label: type, minutes: 30, effort: 1 }; // removed from the list, or from old data
+
+// Tap an activity to log a session now with its defaults; adjust length/effort on the session row.
 function renderExercise() {
   const box = $('exercise');
   const list = draft.exercise;
-  const level = INTENSITY[dayIntensity(list)];
+  const effort = dayEffort(list);
   const h = el('h2', 'split');
-  const tag = el('span', 'intensity', level.label);
-  tag.style.color = level.color;
-  h.append(el('span', null, 'Movement'), tag);
+  const tag = el('span', 'intensity', list == null ? '' : effort == null ? 'rest' : EFFORT[effort].label);
+  tag.style.color = effort == null ? 'var(--muted)' : EFFORT[effort].color;
+  h.append(el('span', null, 'Exercise'), tag);
   box.replaceChildren(h);
 
   const row = el('div', 'emojis');
-  for (const x of EXERCISE) {
-    const b = el('button', list.includes(x.key) ? 'emo on' : 'emo');
-    b.style.setProperty('--c', INTENSITY[x.intensity].color);
-    b.append(el('span', 'e', x.emoji), el('span', 'l', x.label));
-    b.addEventListener('click', () => {
-      draft.exercise = list.includes(x.key) ? list.filter(k => k !== x.key) : [...list, x.key];
+  const chip = (cls, emoji, label, color, onClick) => {
+    const b = el('button', cls);
+    b.style.setProperty('--c', color);
+    b.append(el('span', 'e', emoji), el('span', 'l', label));
+    b.addEventListener('click', onClick);
+    row.append(b);
+    return b;
+  };
+  for (const a of db.settings.activities) {
+    const n = (list || []).filter(x => x.type === a.key).length;
+    const b = chip(n ? 'emo on' : 'emo', a.emoji, a.label, EFFORT[a.effort].color, () => {
+      draft.exercise = [...(draft.exercise || []), { t: nowStamp(), type: a.key, minutes: a.minutes, effort: a.effort }]
+        .sort((x, y) => (x.t || '').localeCompare(y.t || ''));
       save();
       renderExercise();
     });
-    row.append(b);
+    if (n > 1) b.append(el('span', 'badge', `×${n}`));
   }
+  const resting = Array.isArray(list) && !list.length;
+  const rest = chip(resting ? 'emo on' : 'emo', '😴', 'Rest', REST_COLOR, () => {
+    draft.exercise = resting ? null : [];
+    save();
+    renderExercise();
+  });
+  rest.disabled = !!list?.length;
+  chip('emo edit', '⚙︎', 'Edit', REST_COLOR, openActivities);
   box.append(row);
+
+  const ul = el('ul', 'moodlist sessions');
+  (list || []).forEach((x, idx) => {
+    const a = activity(x.type);
+    const li = el('li');
+    const time = x.t ? entryTimeButton(list, x, a.label, renderExercise) : el('button', 't', '—');
+    if (!x.t) time.addEventListener('click', () => openPad({
+      title: a.label, value: null,
+      onSet: hhmm => { x.t = entryStamp(hhmm); list.sort((p, q) => (p.t || '').localeCompare(q.t || '')); save(); renderExercise(); },
+    }));
+    const mins = el('button', 'cyc', x.minutes ? `${x.minutes}m` : '—m');
+    mins.setAttribute('aria-label', 'Change length');
+    mins.addEventListener('click', () => {
+      x.minutes = MINUTE_STEPS.find(m => m > (x.minutes || 0)) ?? MINUTE_STEPS[0];
+      save();
+      renderExercise();
+    });
+    const eff = el('button', 'cyc', EFFORT[x.effort].label);
+    eff.style.color = EFFORT[x.effort].color;
+    eff.setAttribute('aria-label', 'Change effort');
+    eff.addEventListener('click', () => { x.effort = (x.effort + 1) % EFFORT.length; save(); renderExercise(); });
+    const del = el('button', null, '×');
+    del.addEventListener('click', () => {
+      list.splice(idx, 1);
+      if (!list.length) draft.exercise = null;
+      save();
+      renderExercise();
+    });
+    li.append(time, el('span', 'f', `${a.emoji} ${a.label}`), mins, eff, del);
+    ul.append(li);
+  });
+  box.append(ul);
+}
+
+// ---------------------------------------------------------------------------
+// Activity list editor: emoji, name, default length and effort. Keys never change, so renaming is safe.
+// ---------------------------------------------------------------------------
+const slug = text => text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'activity';
+
+function openActivities() {
+  paintActivities();
+  $('actDialog').showModal();
+}
+
+function paintActivities() {
+  const box = $('actList');
+  box.replaceChildren();
+  const commit = () => { save(); renderExercise(); };
+  db.settings.activities.forEach((a, idx) => {
+    const row = el('div', 'actrow');
+    const emoji = el('input', 'actemoji');
+    Object.assign(emoji, { type: 'text', value: a.emoji, ariaLabel: 'Emoji' });
+    emoji.addEventListener('change', () => {
+      const first = [...new Intl.Segmenter().segment(emoji.value.trim())][0]?.segment;
+      a.emoji = first || a.emoji;
+      emoji.value = a.emoji;
+      commit();
+    });
+    const name = el('input', 'actname');
+    Object.assign(name, { type: 'text', value: a.label, ariaLabel: 'Name' });
+    name.addEventListener('change', () => { a.label = name.value.trim() || a.label; name.value = a.label; commit(); });
+    const mins = el('select');
+    for (const m of MINUTE_STEPS) mins.append(new Option(`${m}m`, m, false, m === a.minutes));
+    mins.addEventListener('change', () => { a.minutes = +mins.value; commit(); });
+    const eff = el('select');
+    EFFORT.forEach((e, i) => eff.append(new Option(e.label, i, false, i === a.effort)));
+    eff.addEventListener('change', () => { a.effort = +eff.value; commit(); });
+    const del = el('button', 'actdel', '×');
+    del.setAttribute('aria-label', `Remove ${a.label}`);
+    del.addEventListener('click', () => {
+      db.settings.activities.splice(idx, 1);
+      commit();
+      paintActivities();
+    });
+    row.append(emoji, name, mins, eff, del);
+    box.append(row);
+  });
+}
+
+function bindActivities() {
+  $('actAdd').addEventListener('click', () => {
+    const keys = new Set(db.settings.activities.map(a => a.key));
+    let key = 'new', n = 2;
+    while (keys.has(key)) key = `new-${n++}`;
+    db.settings.activities.push({ key, emoji: '🏅', label: 'New', minutes: 30, effort: 1, fresh: true });
+    save();
+    renderExercise();
+    paintActivities();
+    const names = $('actList').querySelectorAll('.actname');
+    names[names.length - 1].select();
+  });
+  // A new activity takes its key from the name it's first given, then keeps it.
+  $('actDone').addEventListener('click', () => {
+    const keys = new Set();
+    for (const a of db.settings.activities) {
+      if (a.fresh) {
+        let key = slug(a.label), n = 2;
+        while (keys.has(key)) key = `${slug(a.label)}-${n++}`;
+        if (draft.exercise) for (const x of draft.exercise) if (x.type === a.key) x.type = key;
+        a.key = key;
+        delete a.fresh;
+      }
+      keys.add(a.key);
+    }
+    save();
+    renderExercise();
+    $('actDialog').close();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1083,6 +1228,7 @@ const CHECKS = [
   { label: 'wake time', ok: d => d.wake, target: '#wake' },
   { label: 'sleep', ok: d => d.sleepRating != null, target: '[data-rate="sleepRating"]' },
   { label: 'food', ok: d => Object.values(d.meals).some(v => v != null), target: '#scales .meal' },
+  { label: 'exercise', ok: d => d.exercise != null, target: '#exercise .emojis' },
   { label: 'mood', ok: d => d.moods.length, target: '#wheel' },
   { label: 'bed time', ok: d => d.bed, target: '#bed' },
   { label: 'productivity', ok: d => d.productivity != null, target: '#productivity .scale' },
@@ -1122,7 +1268,8 @@ async function endDay() {
   draft = newDraft(manualDate || next <= localDate() ? localDate() : next);
   save();
   renderToday();
-  await backupDay(date);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  toast(`${prettyDate(date)} saved ✦`);
 }
 
 function clearEntry() {
@@ -1135,15 +1282,18 @@ function clearEntry() {
 }
 
 // ---------------------------------------------------------------------------
-// Backup: download (iCloud Downloads) or share sheet
+// Export & import (share sheet). Files carry your tag and activity lists so they can be restored.
 // ---------------------------------------------------------------------------
 // Sleep hours = this morning's wake minus the previous day's bed time.
-// exerciseIntensity comes from the EXERCISE table: 2 intense, 1 moderate, 0 rest.
+// exerciseEffort = hardest session (0 easy, 1 moderate, 2 hard); exerciseMinutes = total length.
 function withDerived(days) {
   return days.map(d => {
     const prev = db.days[addDays(d.date, -1)];
     const { backedUpAt, ...out } = d;
-    out.exerciseIntensity = dayIntensity(d.exercise);
+    if (d.exercise) {
+      out.exerciseEffort = dayEffort(d.exercise);
+      out.exerciseMinutes = d.exercise.every(x => x.minutes) ? dayMinutes(d.exercise) : null; // null = some length unknown
+    }
     for (const x of DRINKS) if (d[x.key]) out[x.count] = d[x.key].length;
     if (prev?.bed && d.wake) {
       const h = (new Date(d.wake) - new Date(prev.bed)) / 36e5;
@@ -1153,8 +1303,13 @@ function withDerived(days) {
   });
 }
 
+const exportSettings = () => ({
+  tags: db.settings.tags,
+  activities: db.settings.activities.map(({ fresh, ...a }) => a),
+});
+
 function payload(range, days, filename) {
-  return { filename, app: 'journo', schema: SCHEMA, exportedAt: new Date().toISOString(), range, days: withDerived(days) };
+  return { filename, app: 'journo', schema: SCHEMA, exportedAt: new Date().toISOString(), range, settings: exportSettings(), days: withDerived(days) };
 }
 
 const dayPayload = date => payload(date, [db.days[date]], `journo-${date}.json`);
@@ -1177,8 +1332,8 @@ function downloadJSON(obj) {
   return true;
 }
 
-// Resolves true if the file was handed off, false if cancelled.
-async function shareJSON(obj) {
+// Resolves true if the file was handed off, false if cancelled. Browsers that can't share files download it.
+async function saveFile(obj) {
   const text = JSON.stringify(obj, null, 2);
   for (const type of ['application/json', 'text/plain']) {
     const file = new File([text], obj.filename, { type });
@@ -1190,18 +1345,7 @@ async function shareJSON(obj) {
   return downloadJSON(obj);
 }
 
-const saveFile = obj => (db.settings.backup === 'share' ? shareJSON(obj) : downloadJSON(obj));
-
-async function backupDay(date) {
-  if (await saveFile(dayPayload(date))) {
-    markBackedUp([date]);
-    toast('Saved & backed up. Good night ✦');
-  } else {
-    toast('Saved on phone · backup cancelled');
-  }
-}
-
-async function backupAll() {
+async function exportAll() {
   const days = sortedDays();
   if (!days.length) return toast('Nothing archived yet');
   const ok = await saveFile(payload('all', days, `journo-all-${localDate()}.json`));
@@ -1220,6 +1364,10 @@ async function importFile(file) {
     const days = Array.isArray(data.days) ? data.days : data.date ? [data] : [];
     const now = new Date().toISOString();
     let added = 0, skipped = 0;
+    // Settings: add any tags/activities you don't have yet; never overwrite yours.
+    const tags = data.settings?.tags || [], acts = data.settings?.activities || [];
+    db.settings.tags = [...new Set([...db.settings.tags, ...tags])];
+    for (const a of acts) if (a.key && !db.settings.activities.some(x => x.key === a.key)) db.settings.activities.push(a);
     for (const d of days) {
       if (!d.date) continue;
       if (db.days[d.date]) { skipped++; continue; }
@@ -1229,6 +1377,7 @@ async function importFile(file) {
     }
     save();
     renderArchive();
+    renderToday();
     toast(`Imported ${added} day${added === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} existing` : ''}`);
   } catch (e) {
     toast('Could not read that file');
@@ -1264,6 +1413,15 @@ const drinkCount = (d, count) => {
   return d[x.key] ? d[x.key].length : d[count] || 0;
 };
 
+// Hardest effort sets the color; more minutes = brighter (an hour or more is full). Rest = dark grey.
+function moveColor(list) {
+  if (list == null) return null;
+  if (!list.length) return REST_COLOR;
+  const color = EFFORT[dayEffort(list)].color;
+  const known = list.every(x => x.minutes);
+  return known ? mix('#26262e', color, 0.4 + 0.6 * Math.min(1, dayMinutes(list) / 60)) : color;
+}
+
 function barColors(d) {
   const moods = d.moods || [];
   const moodColors = moods.map(m => feelingColor(m.core, m.feeling));
@@ -1273,7 +1431,7 @@ function barColors(d) {
       : moods.length === 1 ? moodColors[0]
       : `linear-gradient(90deg, ${moodColors.join(', ')})`,
     food: foodColor(d),
-    move: dayIntensity(d.exercise) ? INTENSITY[dayIntensity(d.exercise)].color : '#4a4a56', // rest = dark grey
+    move: moveColor(d.exercise),
     drinks: !drinkCount(d, 'alcohol') ? null : mix('#5a3d12', '#f2a93b', Math.min(1, (drinkCount(d, 'alcohol') - 1) / 2)),
     read: !d.pages ? null : mix('#4a4030', '#f3dca6', d.pages / PAGES.max),
   };
@@ -1290,24 +1448,14 @@ function dayStrip(d) {
   return bar;
 }
 
-function renderBackupSettings() {
-  const mode = db.settings.backup;
-  document.querySelectorAll('#backupMode button').forEach(b => {
-    b.classList.toggle('active', b.dataset.mode === mode);
-    b.disabled = STANDALONE && b.dataset.mode === 'download';
-  });
-  $('backupHelp').textContent = {
-    download: 'End day saves journo-YYYY-MM-DD.json to Files › Downloads (iCloud Drive/Downloads by default).',
-    share: 'End day opens the share sheet. Pick Save to Files and a folder; iOS remembers the last one.',
-  }[mode] + (STANDALONE ? ' (Home-screen apps can\'t download directly, so the share sheet is always used.)' : '');
-
+function renderExportStatus() {
   const pending = unbackedDays();
   $('unbacked').hidden = !pending.length;
-  $('unbackedText').textContent = `${pending.length} day${pending.length === 1 ? '' : 's'} not backed up yet`;
+  $('unbackedText').textContent = `${pending.length} day${pending.length === 1 ? '' : 's'} not exported yet`;
 }
 
 function renderArchive() {
-  renderBackupSettings();
+  renderExportStatus();
   const box = $('months');
   box.replaceChildren();
   const days = sortedDays().reverse();
@@ -1338,7 +1486,7 @@ function renderArchive() {
     for (const d of list) {
       const row = el('div', 'dayrow');
       const mark = el('span', d.backedUpAt ? 'bk ok' : 'bk', d.backedUpAt ? '☁︎' : '●');
-      mark.title = d.backedUpAt ? 'Backed up' : 'Not backed up yet';
+      mark.title = d.backedUpAt ? 'Exported' : 'Not exported yet';
       const rating = el('span', 'r', d.dayRating == null ? '' : `★${d.dayRating}`);
       row.append(el('span', 'd', prettyDate(d.date).replace(/,.*/, '') + ' ' + d.date.slice(8)), dayStrip(d), rating, mark);
       row.addEventListener('click', () => openDay(d.date));
@@ -1356,14 +1504,7 @@ function openDay(date) {
 }
 
 function bindArchive() {
-  document.querySelectorAll('#backupMode button').forEach(b => b.addEventListener('click', () => {
-    db.settings.backup = b.dataset.mode;
-    save();
-    renderBackupSettings();
-  }));
-  $('backupNow').addEventListener('click', backupAll);
-
-  $('exportAll').addEventListener('click', backupAll);
+  $('exportAll').addEventListener('click', exportAll);
   $('importBtn').addEventListener('click', () => $('importFile').click());
   $('importFile').addEventListener('change', e => { if (e.target.files[0]) importFile(e.target.files[0]); e.target.value = ''; });
   $('clearAll').addEventListener('click', () => {
@@ -1437,6 +1578,7 @@ buildWheel();
 buildDial();
 buildEnergy();
 bindTags();
+bindActivities();
 bindMood();
 bindPad();
 bindArchive();

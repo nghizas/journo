@@ -99,7 +99,7 @@
     <section class="card" id="intimacy"></section>
 
     <section class="card">
-      <h2>Notes</h2>
+      <h2>Notes / Context</h2>
       <form class="noteadd" id="notesForm">
         <input type="text" id="notesInput" placeholder="a thought, a moment…" autocomplete="off" enterkeyhint="done">
         <button class="primary">Add</button>
@@ -131,26 +131,14 @@
 
   <main id="view-archive" class="view" hidden>
     <section class="card">
-      <h2>Nightly backup</h2>
-      <div class="seg" id="backupMode">
-        <button data-mode="download">Download</button>
-        <button data-mode="share">Share sheet</button>
-      </div>
-      <p class="muted" id="backupHelp"></p>
-      <div class="unbacked" id="unbacked" hidden>
-        <span id="unbackedText"></span>
-        <button class="ghost" id="backupNow">Back up all now</button>
-      </div>
-    </section>
-
-    <section class="card">
       <h2>Export</h2>
-      <p class="muted">Saves a JSON file through the share sheet. Pick "Save to Files" and choose an iCloud Drive folder.</p>
+      <p class="muted">Saves a JSON file (your days plus your tag and activity lists) through the share sheet. Pick "Save to Files" and choose an iCloud Drive folder. You can also export a single month or day below.</p>
       <div class="btnrow">
         <button class="primary" id="exportAll">Export everything</button>
         <button class="ghost" id="importBtn">Import backup</button>
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
+      <div class="unbacked" id="unbacked" hidden><span id="unbackedText"></span></div>
     </section>
     <div id="months"></div>
     <section class="card danger">
@@ -166,6 +154,14 @@
       <button class="ghost" id="dayDelete">Delete</button>
       <button class="ghost" id="dayClose">Close</button>
     </div>
+  </dialog>
+
+  <dialog id="actDialog" class="acts">
+    <div class="padtitle">Activities</div>
+    <p class="muted">Tapping an activity logs a session with these defaults. You can still change a session's length and effort.</p>
+    <div id="actList"></div>
+    <button class="ghost" id="actAdd">+ Add activity</button>
+    <button class="primary big" id="actDone">Done</button>
   </dialog>
 
   <dialog id="tagDialog" class="tags">

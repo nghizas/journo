@@ -5,19 +5,10 @@ A minimalist life-data journal for iPhone. Sliders, counters, and an emotion whe
 ## How it works
 
 - **Today** is a draft. Every tap is autosaved on the phone, so you can close the app and come back all day.
-- At night, set **Bed time**, then **End day & save**. The day moves into the on-phone archive and a fresh draft starts.
-- **Archive** lets you export a day, a month, or everything as JSON through the iOS share sheet. Choose *Save to Files* and an iCloud Drive folder to keep the files.
+- At night, set **Bed time**, then **End day & save**. The day moves into the on-phone archive, a fresh draft starts, and the app scrolls back to the top.
+- **Archive** exports everything, a month, or a single day as JSON through the iOS share sheet. Choose *Save to Files* and an iCloud Drive folder to keep the files. Days not exported yet are flagged.
 - **Import backup** restores an exported file onto a new phone or browser.
 - **Back-fill past days:** tap the date at the top to pick an earlier day. Ending that day returns the app to today. Picking a day that's already archived opens it for editing.
-
-## Nightly backup to iCloud
-
-**End day & save** archives the day on the phone and immediately saves `journo-YYYY-MM-DD.json`:
-
-- **Download** (default): goes to Files › Downloads, which is iCloud Drive/Downloads unless you changed it in Settings › Safari › Downloads.
-- **Share sheet**: pick Save to Files and a folder (iOS remembers the last one).
-
-Switch modes under **Archive → Nightly backup**. Days that weren't backed up are flagged, and **Back up all now** exports everything in one file.
 
 ## Time entry
 
@@ -43,7 +34,8 @@ When you change the app, bump `VERSION` in `web/sw.js`.
 
 ```json
 {
-  "app": "journo", "schema": 4, "range": "2026-10", "exportedAt": "…",
+  "app": "journo", "schema": 5, "range": "2026-10", "exportedAt": "…",
+  "settings": { "tags": ["sick", "travel"], "activities": [{ "key": "bootcamp", "emoji": "🏋️", "label": "Boot", "minutes": 45, "effort": 2 }] },
   "days": [{
     "date": "2026-10-15",
     "wake": "2026-10-15T07:10",
@@ -58,8 +50,8 @@ When you change the app, bump `VERSION` in `web/sw.js`.
     "caffeineLog": [{ "t": "2026-10-15T08:05" }, { "t": "2026-10-15T13:40" }],
     "alcoholLog": [{ "t": "2026-10-15T19:30" }],
     "caffeine": 2, "alcohol": 1,
-    "exercise": ["bootcamp", "other"],
-    "exerciseIntensity": 2,
+    "exercise": [{ "t": "2026-10-15T07:00", "type": "bootcamp", "minutes": 45, "effort": 2 }],
+    "exerciseEffort": 2, "exerciseMinutes": 45,
     "sexPartner": 1, "sexSolo": 0,
     "moods": [{ "t": "2026-10-15T14:02", "core": "happy", "feeling": "optimistic", "nuance": "hopeful", "intensity": 4 }],
     "energy": [{ "t": "2026-10-15T15:10", "energy": 2, "tension": 4 }],
@@ -83,7 +75,8 @@ When you change the app, bump `VERSION` in `web/sw.js`.
 - `social`: one entry per interaction. `who` ⊂ partner, family, friends, work, new people. `effect` −2 drained, −1 flat, 0 fine, 1 good, 2 recharged. `[]` = alone (or not logged).
 - `productivity`: 0–4 (jack shit, phoned it in, got by, crushed it, full scale domination). `null` = not rated.
 - `sexPartner` / `sexSolo` are 0–2 where 2 = 2+.
-- `exercise`: activity keys (`yoga`, `bootcamp`, `orangetheory`, `sweep`, `other`); `[]` = rest day (the default). `exerciseIntensity` is derived at export as the hardest activity of the day: 2 intense (yoga/boot/otf), 1 moderate (sweep/other), 0 rest.
+- `exercise`: sessions `{ t, type, minutes, effort }`. `effort` 0 easy, 1 moderate, 2 hard. `null` = not logged, `[]` = rest day. `type` is a stable key from your activity list (Exercise → Edit), so renaming an activity doesn't break old days. `exerciseEffort` (hardest session) and `exerciseMinutes` (total) are added at export. Days before schema 5 have sessions with `t` and `minutes` = `null`.
 - A bed time before noon is stored as the next calendar date. `sleepHours` = this day's `wake` − previous day's `bed`.
 - Days you filled in later are marked `"backfill": true`.
+- `settings` holds your tag and activity lists. Importing a file adds any you don't have; it never overwrites yours.
 - Everything you track is defined at the top of `web/app.js`: the `MEALS`, `FOOD`, `PAGES`, `DRINKS`, `DREAM_RECALL`, `DEFAULT_TAGS`, `ENERGY`, `SOCIAL`, `PRODUCTIVITY`, `PICKS`, `EXERCISE`, `INTENSITY` and `WHEEL` lists.
