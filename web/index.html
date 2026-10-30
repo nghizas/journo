@@ -55,11 +55,21 @@
     <section class="card" id="exercise"></section>
 
     <section class="card">
+      <h2>Reading</h2>
+      <div class="dialrow">
+        <button class="dialstep" id="pagesLess" aria-label="5 fewer pages">−</button>
+        <svg id="dial" viewBox="-100 -96 200 182" aria-label="Pages read"></svg>
+        <button class="dialstep" id="pagesMore" aria-label="5 more pages">+</button>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Mood</h2>
       <svg id="wheel" viewBox="-160 -160 320 320" aria-label="Emotion wheel"></svg>
       <div class="moodpick" id="moodPick" hidden>
         <button class="moodclose" id="moodCancel" aria-label="Close without logging">×</button>
         <div class="moodname" id="moodName"></div>
+        <div class="nuance" id="moodNuance" hidden></div>
         <div class="scale">
           <div class="scalehead"><span>Intensity</span><span class="val" id="moodIntVal">3</span></div>
           <input type="range" min="1" max="5" step="1" value="3" id="moodInt" class="grad">

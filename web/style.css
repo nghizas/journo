@@ -132,6 +132,15 @@ code { background: var(--line); padding: 1px 5px; border-radius: 5px; font-size:
 .scalehead .name { font-weight: 550; }
 .scalehead .hint { color: var(--muted); font-size: 12px; margin-left: 6px; }
 .scalehead .val { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+.scalehead .right { display: flex; align-items: center; gap: 10px; }
+.meal .val { text-transform: lowercase; }
+.scalehead .skip {
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.scalehead .skip.on { background: var(--line); color: var(--text); }
+.meal .name { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
 .scalehead .clear { border: 0; background: none; color: var(--muted); padding: 0 0 0 10px; font-size: 18px; line-height: 1; }
 
 input[type="range"].grad {
@@ -232,6 +241,32 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
 #wheel .hubtext { fill: var(--muted); font-size: 11px; font-weight: 500; }
 
 .moodpick { margin-top: 14px; }
+.nuance { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 14px; }
+.nuance button {
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  border-radius: 999px; padding: 6px 12px; font-size: 14px;
+}
+.nuance button.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 25%, transparent); color: var(--text); }
+
+/* ---- reading dial ---- */
+.dialrow { display: flex; align-items: center; justify-content: center; gap: 6px; }
+#dial { width: 100%; max-width: 230px; display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+#dial .track, #dial .fill { fill: none; stroke-width: 12; stroke-linecap: round; }
+#dial .track { stroke: var(--line); }
+#dial .fill { stroke: #f0cf86; }
+#dial .tick { stroke: var(--line); stroke-width: 1.5; }
+#dial .tick.major { stroke: var(--muted); }
+#dial text { fill: var(--muted); text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+#dial .lbl { font-size: 10px; font-variant-numeric: tabular-nums; }
+#dial .num { fill: var(--text); font-size: 44px; font-weight: 300; font-variant-numeric: tabular-nums; }
+#dial.zero .num { fill: var(--muted); }
+#dial .unit { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
+#dial .knob { fill: #fff; stroke: rgba(0,0,0,.25); stroke-width: 3; }
+.dialstep {
+  flex: none; width: 44px; height: 44px; border-radius: 50%;
+  border: 1px solid var(--line); background: none; color: var(--text); font-size: 22px; line-height: 1;
+}
+.dialstep:disabled { opacity: .3; }
 .moodname { font-size: 18px; font-weight: 600; margin-bottom: 12px; text-transform: capitalize; }
 .moodpick { position: relative; }
 .moodpick .primary { width: 100%; margin-top: 14px; }
@@ -268,14 +303,14 @@ input[type="range"].grad.unset::-webkit-slider-thumb { background: #bbb; }
 .dayrow .d { width: 74px; font-variant-numeric: tabular-nums; }
 .dayrow .daybar {
   flex: 1; display: grid; gap: 2px; height: 16px;
-  grid-template-columns: 1fr 4fr 1fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 4fr) minmax(0, 2fr) repeat(3, minmax(0, 1fr));
   border-radius: 4px; overflow: hidden;
 }
 .daybar .off { background: var(--line); opacity: .5; }
 .dayrow .r { width: 26px; text-align: right; font-size: 12px; color: #f6c945; font-variant-numeric: tabular-nums; }
 .dayrow.legend { padding: 0 0 6px; border-top: 0; cursor: default; }
 .dayrow.legend .daybar { height: auto; overflow: visible; }
-.dayrow.legend .daybar span { font-size: 9px; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: .04em; opacity: 1; background: none; }
+.dayrow.legend .daybar span { font-size: 11px; line-height: 1; text-align: center; opacity: .8; background: none; }
 .seg button:disabled { opacity: .35; }
 .dayrow .bk { width: 16px; text-align: center; font-size: 10px; color: #ffb86b; }
 .dayrow .bk.ok { font-size: 14px; color: var(--muted); }

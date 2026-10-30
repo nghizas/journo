@@ -3,14 +3,24 @@
 // ---------------------------------------------------------------------------
 // Config — add/remove metrics here. Keys become fields in the exported JSON.
 // ---------------------------------------------------------------------------
-const SCHEMA = 2;
+const SCHEMA = 3;
 const STORE_KEY = 'journo.v1';
 
-const SCALES = [
-  { key: 'diet', label: 'Food', min: 0, max: 10, step: 1, start: 5,
-    stops: ['#d9483b', '#f08a3e', '#f2c94c', '#6fcf6a', '#2fae74'],
-    tiers: [[0, 'junk'], [3, 'meh'], [5, 'mixed'], [7, 'clean'], [9, 'dialed in']] },
+// Each meal is skipped (null, the default) or a 0–4 rating: trash, junk, mixed, clean, dialed.
+const MEALS = [
+  { key: 'breakfast', label: 'Breakfast' },
+  { key: 'lunch', label: 'Lunch' },
+  { key: 'dinner', label: 'Dinner' },
+  { key: 'other', label: 'Other' },
 ];
+const FOOD = {
+  tiers: ['trash', 'junk', 'mixed', 'clean', 'dialed'],
+  stops: ['#d9483b', '#f08a3e', '#f2c94c', '#6fcf6a', '#2fae74'],
+};
+const emptyMeals = () => Object.fromEntries(MEALS.map(m => [m.key, null]));
+
+// Pages read: 0–50 in steps of 5; 50 means 50+.
+const PAGES = { max: 50, step: 5 };
 
 // Tap-to-pick rows. Stored as the option index, so the last option means "or more".
 const PICKS = [
@@ -35,15 +45,35 @@ const EXERCISE = [
 ];
 const dayIntensity = keys => Math.max(0, ...(keys || []).map(k => EXERCISE.find(x => x.key === k)?.intensity ?? 0));
 
-// Simplified Willcox feelings wheel: core → secondary feelings.
+// Willcox feelings wheel: core → feeling (wheel ring) → nuance (chips after you pick a feeling).
+// "calm" is our addition: the original wheel has no low-energy, okay-to-good states.
 const WHEEL = [
-  { core: 'happy', color: '#f6c945', leaves: ['playful', 'content', 'interested', 'proud', 'accepted', 'powerful', 'peaceful', 'trusting', 'optimistic'] },
-  { core: 'surprised', color: '#f39a4c', leaves: ['startled', 'confused', 'amazed', 'excited'] },
-  { core: 'bad', color: '#93c46b', leaves: ['bored', 'busy', 'stressed', 'tired'] },
-  { core: 'fearful', color: '#4fb8ab', leaves: ['scared', 'anxious', 'insecure', 'weak', 'rejected', 'threatened'] },
-  { core: 'angry', color: '#e2615c', leaves: ['let down', 'humiliated', 'bitter', 'mad', 'aggressive', 'frustrated', 'distant', 'critical'] },
-  { core: 'disgusted', color: '#a487d8', leaves: ['disapproving', 'disappointed', 'awful', 'repelled'] },
-  { core: 'sad', color: '#5f8fe0', leaves: ['hurt', 'depressed', 'guilty', 'despair', 'vulnerable', 'lonely'] },
+  { core: 'happy', color: '#f6c945', leaves: {
+    playful: ['aroused', 'cheeky'], content: ['free', 'joyful'], interested: ['curious', 'inquisitive'],
+    proud: ['successful', 'confident'], accepted: ['respected', 'valued'], powerful: ['courageous', 'creative'],
+    peaceful: ['loving', 'thankful'], trusting: ['sensitive', 'intimate'], optimistic: ['hopeful', 'inspired'] } },
+  { core: 'surprised', color: '#f39a4c', leaves: {
+    startled: ['shocked', 'dismayed'], confused: ['disillusioned', 'perplexed'],
+    amazed: ['astonished', 'awe'], excited: ['eager', 'energetic'] } },
+  { core: 'bad', color: '#93c46b', leaves: {
+    bored: ['indifferent', 'apathetic'], busy: ['pressured', 'rushed'],
+    stressed: ['overwhelmed', 'out of control'], tired: ['sleepy', 'unfocused'] } },
+  { core: 'fearful', color: '#4fb8ab', leaves: {
+    scared: ['helpless', 'frightened'], anxious: ['overwhelmed', 'worried'], insecure: ['inadequate', 'inferior'],
+    weak: ['worthless', 'insignificant'], rejected: ['excluded', 'persecuted'], threatened: ['nervous', 'exposed'] } },
+  { core: 'angry', color: '#e2615c', leaves: {
+    'let down': ['betrayed', 'resentful'], humiliated: ['disrespected', 'ridiculed'], bitter: ['indignant', 'violated'],
+    mad: ['furious', 'jealous'], aggressive: ['provoked', 'hostile'], frustrated: ['infuriated', 'annoyed'],
+    distant: ['withdrawn', 'numb'], critical: ['skeptical', 'dismissive'] } },
+  { core: 'disgusted', color: '#a487d8', leaves: {
+    disapproving: ['judgmental', 'embarrassed'], disappointed: ['appalled', 'revolted'],
+    awful: ['nauseated', 'detestable'], repelled: ['horrified', 'hesitant'] } },
+  { core: 'sad', color: '#5f8fe0', leaves: {
+    hurt: ['embarrassed', 'disappointed'], depressed: ['inferior', 'empty'], guilty: ['remorseful', 'ashamed'],
+    despair: ['powerless', 'grief'], vulnerable: ['fragile', 'victimized'], lonely: ['abandoned', 'isolated'] } },
+  { core: 'calm', color: '#7fd6a0', leaves: {
+    relaxed: ['at ease', 'unhurried'], rested: ['refreshed', 'recharged'], focused: ['absorbed', 'in flow'],
+    relieved: ['lighter', 'released'], grounded: ['present', 'steady'], neutral: ['okay', 'meh'] } },
 ];
 
 // ---------------------------------------------------------------------------
@@ -67,7 +97,8 @@ const DEFAULT_SETTINGS = { backup: STANDALONE ? 'share' : 'download' };
 
 function newDraft(date = localDate()) {
   const d = { date, wake: null, bed: null, sleepRating: null, dayRating: null, dreams: [], moods: [], notes: [] };
-  for (const s of SCALES) d[s.key] = null;
+  d.meals = emptyMeals();
+  d.pages = 0;
   for (const p of PICKS) d[p.key] = 0;
   d.exercise = [];
   return d;
@@ -76,7 +107,8 @@ function newDraft(date = localDate()) {
 function isEmpty(d) {
   return !d.wake && !d.bed && !d.notes.length && !d.dreams.length && !d.moods.length
     && d.sleepRating == null && d.dayRating == null
-    && SCALES.every(s => d[s.key] == null) && PICKS.every(p => !d[p.key]) && !d.exercise?.length;
+    && d.diet == null && Object.values(d.meals || {}).every(v => v == null) && !d.pages
+    && PICKS.every(p => !d[p.key]) && !d.exercise?.length;
 }
 
 // Upgrades entries saved by earlier versions: exercise always an array (rest = []);
@@ -103,7 +135,9 @@ function load() {
         settings.backup = 'share';
         for (const d of Object.values(days)) delete d.backedUpAt;
       }
-      return { ...raw, schema: SCHEMA, draft: migrate(raw.draft), days, settings };
+      // Older drafts predate meals/pages; archived days keep what they had (old days have a single 0–10 "diet").
+      const draft = { meals: emptyMeals(), pages: 0, ...migrate(raw.draft) };
+      return { ...raw, schema: SCHEMA, draft, days, settings };
     }
   } catch (e) { console.warn(e); }
   return { schema: SCHEMA, draft: newDraft(), days: {}, settings: { ...DEFAULT_SETTINGS } };
@@ -406,34 +440,31 @@ function bindPad() {
 // ---------------------------------------------------------------------------
 // Sliders, picks & exercise
 // ---------------------------------------------------------------------------
-const tierOf = (s, v) => s.tiers?.filter(([min]) => v >= min).pop()?.[1];
-
-function scaleEl(s) {
-  const wrap = el('div', 'scale');
+// One slider per meal. Skipped (the default) dims the slider; touching it logs a rating.
+function mealEl(m) {
+  const wrap = el('div', 'scale meal');
   const head = el('div', 'scalehead');
-  const left = el('span');
-  left.append(el('span', 'name', s.label));
-  if (s.hint) left.append(el('span', 'hint', s.hint));
-  const right = el('span');
   const val = el('span', 'val');
-  const clear = el('button', 'clear', '×');
-  clear.setAttribute('aria-label', `Clear ${s.label}`);
-  right.append(val, clear);
-  head.append(left, right);
+  const skip = el('button', 'skip', 'skipped');
+  const right = el('span', 'right');
+  right.append(val, skip);
+  head.append(el('span', 'name', m.label), right);
 
   const input = el('input', 'grad');
-  Object.assign(input, { type: 'range', min: s.min, max: s.max, step: s.step });
-  input.style.setProperty('--grad', `linear-gradient(90deg, ${s.stops.join(', ')})`);
+  Object.assign(input, { type: 'range', min: 0, max: FOOD.tiers.length - 1, step: 1 });
+  input.style.setProperty('--grad', `linear-gradient(90deg, ${FOOD.stops.join(', ')})`);
+  input.setAttribute('aria-label', m.label);
 
   const paint = () => {
-    const v = draft[s.key];
+    const v = draft.meals[m.key];
     input.classList.toggle('unset', v == null);
-    input.value = v ?? s.start;
-    val.textContent = v == null ? '—' : [v + (s.unit ? ' ' + s.unit : ''), tierOf(s, v)].filter(Boolean).join(' · ');
-    clear.style.visibility = v == null ? 'hidden' : 'visible';
+    input.value = v ?? 2;
+    val.textContent = v == null ? '' : FOOD.tiers[v];
+    val.style.color = v == null ? '' : FOOD.stops[v];
+    skip.classList.toggle('on', v == null);
   };
-  enhanceRange(input, v => { if (draft[s.key] !== v) { draft[s.key] = v; save(); } paint(); });
-  clear.addEventListener('click', () => { draft[s.key] = null; save(); paint(); });
+  enhanceRange(input, v => { if (draft.meals[m.key] !== v) { draft.meals[m.key] = v; save(); } paint(); });
+  skip.addEventListener('click', () => { draft.meals[m.key] = null; save(); paint(); });
 
   paint();
   wrap.append(head, input);
@@ -456,8 +487,8 @@ function pickEl(p, cls = 'pickrow') {
 
 function renderScales() {
   const box = $('scales');
-  box.replaceChildren(el('h2', null, 'Today'));
-  for (const s of SCALES) box.append(scaleEl(s));
+  box.replaceChildren(el('h2', null, 'Food & drink'));
+  for (const m of MEALS) box.append(mealEl(m));
   for (const p of PICKS.filter(p => p.card === 'scales')) box.append(pickEl(p));
 
   const intimacy = $('intimacy');
@@ -497,7 +528,7 @@ function renderExercise() {
 const SVGNS = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
 const R_HUB = 30, R_CORE = 92, R_LEAF = 158;
-let pick = null; // { core, feeling }
+let pick = null; // { core, feeling, nuance }
 
 function arcPath(r0, r1, a0, a1) {
   const p = (r, a) => `${(r * Math.cos(a)).toFixed(2)} ${(r * Math.sin(a)).toFixed(2)}`;
@@ -523,15 +554,16 @@ function feelingColor(core, feeling) {
 
 function buildWheel() {
   const root = $('wheel');
-  const total = WHEEL.reduce((s, c) => s + c.leaves.length, 0);
+  const total = WHEEL.reduce((s, c) => s + Object.keys(c.leaves).length, 0);
   const step = (2 * Math.PI) / total;
   let a = -Math.PI / 2;
   for (const c of WHEEL) {
-    const a0 = a, a1 = a + step * c.leaves.length;
+    const leaves = Object.keys(c.leaves);
+    const a0 = a, a1 = a + step * leaves.length;
     const corePath = svg('path', { d: arcPath(R_HUB, R_CORE, a0, a1), fill: c.color });
     corePath.dataset.core = c.core;
     root.append(corePath, radialText(c.core, (R_HUB + R_CORE) / 2 + 4, (a0 + a1) / 2, 'core'));
-    c.leaves.forEach((leaf, i) => {
+    leaves.forEach((leaf, i) => {
       const b0 = a0 + step * i, b1 = b0 + step;
       const p = svg('path', { d: arcPath(R_CORE, R_LEAF, b0, b1), fill: feelingColor(c.core, leaf) });
       p.dataset.core = c.core;
@@ -548,7 +580,7 @@ function buildWheel() {
   root.addEventListener('click', e => {
     const p = e.target.closest('path');
     if (!p) return;
-    const next = { core: p.dataset.core, feeling: p.dataset.feeling || null };
+    const next = { core: p.dataset.core, feeling: p.dataset.feeling || null, nuance: null };
     pick = pick && pick.core === next.core && pick.feeling === next.feeling ? null : next;
     paintWheel();
   });
@@ -561,11 +593,24 @@ function paintWheel() {
     p.classList.toggle('dim', !!pick && p.dataset.core !== pick.core);
   }
   $('moodPick').hidden = !pick;
-  if (pick) {
-    $('moodName').textContent = pick.feeling ? `${pick.feeling} · ${pick.core}` : pick.core;
-    $('moodName').style.color = feelingColor(pick.core, pick.feeling);
+  if (!pick) return;
+  $('moodName').textContent = [pick.nuance, pick.feeling, pick.core].filter(Boolean).join(' · ');
+  $('moodName').style.color = feelingColor(pick.core, pick.feeling);
+
+  // Optional third level: narrow the feeling down to a more exact word.
+  const box = $('moodNuance');
+  const words = pick.feeling ? WHEEL.find(w => w.core === pick.core).leaves[pick.feeling] : [];
+  box.hidden = !words.length;
+  box.replaceChildren();
+  box.style.setProperty('--c', feelingColor(pick.core, pick.feeling));
+  for (const w of words) {
+    const b = el('button', w === pick.nuance ? 'on' : null, w);
+    b.addEventListener('click', () => { pick.nuance = pick.nuance === w ? null : w; paintWheel(); });
+    box.append(b);
   }
 }
+
+const moodWord = m => m.nuance || m.feeling || m.core;
 
 function renderMoods() {
   const list = $('moodList');
@@ -576,10 +621,84 @@ function renderMoods() {
     dot.style.background = feelingColor(m.core, m.feeling);
     const del = el('button', null, '×');
     del.addEventListener('click', () => { draft.moods.splice(idx, 1); save(); renderMoods(); });
-    li.append(dot, entryTimeButton(draft.moods, m, m.feeling || m.core, renderMoods), el('span', 'f', m.feeling || m.core),
+    li.append(dot, entryTimeButton(draft.moods, m, moodWord(m), renderMoods), el('span', 'f', moodWord(m)),
       el('span', 'i', '●'.repeat(m.intensity) + '○'.repeat(5 - m.intensity)), del);
     list.append(li);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Reading dial: drag around the arc (or tap −/+). 270° gauge, open at the bottom.
+// ---------------------------------------------------------------------------
+const DIAL = { r: 68, a0: 135, sweep: 270 }; // degrees, clockwise from 3 o'clock
+const dialAngle = v => ((DIAL.a0 + (v / PAGES.max) * DIAL.sweep) * Math.PI) / 180;
+const dialPoint = (r, a) => `${(r * Math.cos(a)).toFixed(2)} ${(r * Math.sin(a)).toFixed(2)}`;
+const dialArc = (v0, v1) => {
+  const a0 = dialAngle(v0), a1 = dialAngle(v1);
+  return `M${dialPoint(DIAL.r, a0)}A${DIAL.r} ${DIAL.r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${dialPoint(DIAL.r, a1)}`;
+};
+const pagesLabel = v => (v >= PAGES.max ? `${PAGES.max}+` : String(v));
+
+function setPages(v) {
+  v = Math.min(PAGES.max, Math.max(0, v));
+  if (draft.pages === v) return;
+  draft.pages = v;
+  save();
+  paintDial();
+}
+
+function buildDial() {
+  const root = $('dial');
+  root.append(svg('path', { d: dialArc(0, PAGES.max), class: 'track' }), svg('path', { class: 'fill' }));
+  for (let v = 0; v <= PAGES.max; v += PAGES.step) {
+    const a = dialAngle(v), major = v % 10 === 0;
+    const [x1, y1] = dialPoint(DIAL.r - 15, a).split(' '), [x2, y2] = dialPoint(DIAL.r - (major ? 22 : 19), a).split(' ');
+    root.append(svg('line', { x1, y1, x2, y2, class: major ? 'tick major' : 'tick' }));
+    if (major) {
+      const [x, y] = dialPoint(DIAL.r + 20, a).split(' ');
+      const t = svg('text', { x, y, class: 'lbl' });
+      t.textContent = pagesLabel(v);
+      root.append(t);
+    }
+  }
+  const num = svg('text', { x: 0, y: -2, class: 'num' });
+  const unit = svg('text', { x: 0, y: 26, class: 'unit' });
+  unit.textContent = 'pages';
+  root.append(num, unit, svg('circle', { r: 12, class: 'knob' }));
+
+  // Pointer angle → nearest step. In the gap at the bottom, stay pinned to whichever end you came from.
+  const offset = e => {
+    const r = root.getBoundingClientRect(), vb = root.viewBox.baseVal, k = vb.width / r.width;
+    return [(e.clientX - r.left) * k + vb.x, (e.clientY - r.top) * k + vb.y]; // in dial units
+  };
+  const set = e => {
+    const [dx, dy] = offset(e);
+    const rel = ((Math.atan2(dy, dx) * 180) / Math.PI - DIAL.a0 + 720) % 360;
+    const v = rel > DIAL.sweep ? (draft.pages >= PAGES.max / 2 ? PAGES.max : 0)
+      : Math.round((rel / DIAL.sweep) * (PAGES.max / PAGES.step)) * PAGES.step;
+    setPages(v);
+  };
+  let dragging = false;
+  root.addEventListener('pointerdown', e => {
+    dragging = Math.hypot(...offset(e)) > DIAL.r - 30; // taps on the number in the middle do nothing
+    if (dragging) { set(e); root.setPointerCapture?.(e.pointerId); }
+  });
+  root.addEventListener('pointermove', e => { if (dragging && (e.pressure > 0 || e.buttons)) set(e); });
+  root.addEventListener('pointerup', () => { dragging = false; });
+  $('pagesLess').addEventListener('click', () => setPages(draft.pages - PAGES.step));
+  $('pagesMore').addEventListener('click', () => setPages(draft.pages + PAGES.step));
+}
+
+function paintDial() {
+  const root = $('dial');
+  const v = draft.pages || 0;
+  root.querySelector('.fill').setAttribute('d', v ? dialArc(0, v) : '');
+  root.querySelector('.num').textContent = pagesLabel(v);
+  const [cx, cy] = dialPoint(DIAL.r, dialAngle(v)).split(' ');
+  Object.entries({ cx, cy }).forEach(([k, x]) => root.querySelector('.knob').setAttribute(k, x));
+  root.classList.toggle('zero', !v);
+  $('pagesLess').disabled = !v;
+  $('pagesMore').disabled = v >= PAGES.max;
 }
 
 // ---------------------------------------------------------------------------
@@ -651,10 +770,11 @@ function bindMood() {
   $('moodCancel').addEventListener('click', () => { pick = null; paintWheel(); });
   $('moodLog').addEventListener('click', () => {
     if (!pick) return;
-    draft.moods.push({ t: nowStamp(), core: pick.core, feeling: pick.feeling, intensity: +int.value });
+    const { core, feeling, nuance } = pick;
+    draft.moods.push({ t: nowStamp(), core, feeling, ...(nuance && { nuance }), intensity: +int.value });
     draft.moods.sort((a, b) => a.t.localeCompare(b.t));
     save();
-    toast(`Logged ${pick.feeling || pick.core}`);
+    toast(`Logged ${moodWord(pick)}`);
     pick = null;
     paintWheel();
     renderMoods();
@@ -668,7 +788,7 @@ function bindMood() {
 const CHECKS = [
   { label: 'wake time', ok: d => d.wake, target: '#wake' },
   { label: 'sleep', ok: d => d.sleepRating != null, target: '[data-rate="sleepRating"]' },
-  { label: 'food', ok: d => d.diet != null, target: '#scales .scale' },
+  { label: 'food', ok: d => Object.values(d.meals).some(v => v != null), target: '#scales .meal' },
   { label: 'mood', ok: d => d.moods.length, target: '#wheel' },
   { label: 'bed time', ok: d => d.bed, target: '#bed' },
   { label: 'day rating', ok: d => d.dayRating != null, target: '[data-rate="dayRating"]' },
@@ -826,7 +946,21 @@ const sortedDays = () => Object.values(db.days).sort((a, b) => a.date.localeComp
 
 // Fixed slots so days line up like a chart: sleep | mood through the day | food | movement | drinks.
 // Unlogged slots stay dim. Grid columns are shared with the legend row (.daybar in CSS).
-const BAR_SLOTS = ['sleep', 'mood', 'food', 'move', 'drinks'];
+const BAR_SLOTS = ['sleep', 'mood', 'food', 'move', 'drinks', 'read'];
+const BAR_ICONS = { sleep: '💤', mood: '🙂', food: '🍽️', move: '🏃', drinks: '🍷', read: '📖' };
+const SKIPPED = '#33333d';
+
+// Meals sit side by side in the food slot (skipped = dark); days from before meals use their single 0–10 diet.
+function foodColor(d) {
+  if (d.meals && Object.values(d.meals).some(v => v != null)) {
+    const n = MEALS.length;
+    return `linear-gradient(90deg, ${MEALS.map((m, i) => {
+      const v = d.meals[m.key];
+      return `${v == null ? SKIPPED : FOOD.stops[v]} ${(i * 100) / n}% ${((i + 1) * 100) / n}%`;
+    }).join(', ')})`;
+  }
+  return d.diet == null ? null : sampleStops(FOOD.stops, d.diet / 10);
+}
 
 function barColors(d) {
   const moods = d.moods || [];
@@ -836,9 +970,10 @@ function barColors(d) {
     mood: !moods.length ? null
       : moods.length === 1 ? moodColors[0]
       : `linear-gradient(90deg, ${moodColors.join(', ')})`,
-    food: d.diet == null ? null : sampleStops(SCALES[0].stops, d.diet / 10),
+    food: foodColor(d),
     move: dayIntensity(d.exercise) ? INTENSITY[dayIntensity(d.exercise)].color : '#4a4a56', // rest = dark grey
     drinks: !d.alcohol ? null : mix('#5a3d12', '#f2a93b', (d.alcohol - 1) / 2),
+    read: !d.pages ? null : mix('#4a4030', '#f3dca6', d.pages / PAGES.max),
   };
 }
 
@@ -891,7 +1026,11 @@ function renderArchive() {
     h.append(el('span', null, `${title} · ${list.length}`), btn);
     const legend = el('div', 'dayrow legend');
     const labels = el('div', 'daybar');
-    for (const slot of BAR_SLOTS) labels.append(el('span', slot, slot));
+    for (const slot of BAR_SLOTS) {
+      const icon = el('span', slot, BAR_ICONS[slot]);
+      icon.title = slot;
+      labels.append(icon);
+    }
     legend.append(el('span', 'd'), labels, el('span', 'r'), el('span', 'bk'));
     card.append(h, legend);
     for (const d of list) {
@@ -968,6 +1107,7 @@ function renderToday() {
   renderTimes();
   renderScales();
   renderExercise();
+  paintDial();
   renderMoods();
   LOGS.forEach(renderLog);
   document.querySelectorAll('.stars').forEach(paintStars);
@@ -987,6 +1127,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { ro
 rollForward();
 bindTimes();
 buildWheel();
+buildDial();
 bindMood();
 bindPad();
 bindArchive();

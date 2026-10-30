@@ -43,7 +43,7 @@ When you change the app, bump `VERSION` in `web/sw.js`.
 
 ```json
 {
-  "app": "journo", "schema": 2, "range": "2026-10", "exportedAt": "…",
+  "app": "journo", "schema": 3, "range": "2026-10", "exportedAt": "…",
   "days": [{
     "date": "2026-10-15",
     "wake": "2026-10-15T07:10",
@@ -52,22 +52,25 @@ When you change the app, bump `VERSION` in `web/sw.js`.
     "sleepRating": 4,
     "dayRating": 4,
     "dreams": [{ "t": "2026-10-15T07:15", "text": "flying over a city" }],
-    "diet": 7,
+    "meals": { "breakfast": null, "lunch": 3, "dinner": 2, "other": null },
+    "pages": 15,
     "alcohol": 1,
     "exercise": ["bootcamp", "other"],
     "exerciseIntensity": 2,
     "sexPartner": 1, "sexSolo": 0,
-    "moods": [{ "t": "2026-10-15T14:02", "core": "happy", "feeling": "optimistic", "intensity": 4 }],
+    "moods": [{ "t": "2026-10-15T14:02", "core": "happy", "feeling": "optimistic", "nuance": "hopeful", "intensity": 4 }],
     "notes": [{ "t": "2026-10-15T13:27", "text": "coffee with a friend" }],
     "savedAt": "…"
   }]
 }
 ```
 
-- `diet` is 0–10 (tiers: junk 0–2, meh 3–4, mixed 5–6, clean 7–8, dialed in 9–10). `null` = not logged.
+- `meals`: each of `breakfast`, `lunch`, `dinner`, `other` is 0–4 (trash, junk, mixed, clean, dialed) or `null` = skipped (the default). Days logged before schema 3 have a single `diet` 0–10 instead (junk 0–2, meh 3–4, mixed 5–6, clean 7–8, dialed in 9–10).
+- `pages` is pages read, 0–50 in steps of 5, where 50 = 50+.
+- `moods`: `core` → `feeling` → optional `nuance`, from the Willcox feelings wheel plus an added `calm` core.
 - `sleepRating` / `dayRating` are 1–5; `null` = not rated.
 - `alcohol` is 0–3 where 3 = 3+. `sexPartner` / `sexSolo` are 0–2 where 2 = 2+.
 - `exercise`: activity keys (`yoga`, `bootcamp`, `orangetheory`, `sweep`, `other`); `[]` = rest day (the default). `exerciseIntensity` is derived at export as the hardest activity of the day: 2 intense (yoga/boot/otf), 1 moderate (sweep/other), 0 rest.
 - A bed time before noon is stored as the next calendar date. `sleepHours` = this day's `wake` − previous day's `bed`.
 - Days you filled in later are marked `"backfill": true`.
-- Everything you track is defined at the top of `web/app.js`: the `SCALES`, `PICKS`, `EXERCISE` and `INTENSITY` lists.
+- Everything you track is defined at the top of `web/app.js`: the `MEALS`, `FOOD`, `PAGES`, `PICKS`, `EXERCISE`, `INTENSITY` and `WHEEL` lists.
